@@ -4,6 +4,7 @@ from datetime import date
 from supabase import create_client, Client
 import os
 import time
+from github_utils import get_github_access_token, github_api, get_local_git_info
 
 # --- 1. CONEXÃO COM O SUPABASE ---
 try:
@@ -77,7 +78,7 @@ def enviar_nota_com_foto(cpf, valor, data_nota, arquivo_foto):
 # --- INTERFACE ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2845/2845667.png", width=80)
 st.sidebar.title("NotaFácil Prime")
-menu = st.sidebar.radio("Menu", ["Área do Atleta", "Sala de Guerra (Admin)"])
+menu = st.sidebar.radio("Menu", ["Área do Atleta", "Sala de Guerra (Admin)", "🔗 Git / GitHub"])
 
 # === TELA DO ATLETA ===
 if menu == "Área do Atleta":
@@ -188,3 +189,91 @@ elif menu == "Sala de Guerra (Admin)":
                 st.info("Nenhum lançamento encontrado.")
     else:
         st.warning("🔒 Área restrita.")
+
+# === TELA GIT / GITHUB ===
+elif menu == "🔗 Git / GitHub":
+    st.title("🔗 Git / GitHub")
+
+    tab_local, tab_github = st.tabs(["📁 Git Local", "🐙 GitHub"])
+
+    with tab_local:
+        st.subheader("Repositório Local")
+
+        if st.button("🔄 Atualizar Info Git"):
+            st.rerun()
+
+        git_info = get_local_git_info()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Branch Atual", git_info["branch"])
+        with c2:
+            st.metric("Arquivos Modificados", len(git_info["status"]))
+
+        if git_info["status"]:
+            st.subheader("📝 Arquivos com Alterações")
+            for item in git_info["status"]:
+                parts = item.strip().split(None, 1)
+                if len(parts) == 2:
+                    status_code, filename = parts
+                    labels = {
+                        "M": "🟡 Modificado",
+                        "A": "🟢 Adicionado",
+                        "D": "🔴 Removido",
+                        "??": "⚪ Não rastreado",
+                        "R": "🔵 Renomeado",
+                    }
+                    label = labels.get(status_code, f"📄 {status_code}")
+                    st.text(f"  {label}  →  {filename}")
+                else:
+                    st.text(f"  {item}")
+        else:
+            st.success("✅ Nenhuma alteração pendente.")
+
+        if git_info["recent_commits"]:
+            st.subheader("📜 Últimos Commits")
+            for commit in git_info["recent_commits"]:
+                st.code(commit, language=None)
+
+        if git_info["remote"]:
+            st.subheader("🌐 Repositórios Remotos")
+            st.code(git_info["remote"], language=None)
+
+    with tab_github:
+        st.subheader("Conta GitHub Conectada")
+
+        token = get_github_access_token()
+
+        if token:
+            user = github_api("/user", token)
+            if user:
+                col_avatar, col_info = st.columns([1, 3])
+                with col_avatar:
+                    st.image(user.get("avatar_url", ""), width=100)
+                with col_info:
+                    st.markdown(f"### {user.get('name', user.get('login', 'Usuário'))}")
+                    st.text(f"@{user.get('login', '')}")
+                    if user.get("bio"):
+                        st.caption(user["bio"])
+                    st.markdown(f"[Perfil GitHub](https://github.com/{user.get('login', '')})")
+
+                st.divider()
+                st.subheader("📂 Seus Repositórios")
+
+                repos = github_api("/user/repos?sort=updated&per_page=15", token)
+                if repos:
+                    for repo in repos:
+                        with st.expander(f"{'🔒' if repo.get('private') else '📂'} {repo['full_name']}"):
+                            st.write(repo.get("description") or "_Sem descrição_")
+                            rc1, rc2, rc3 = st.columns(3)
+                            rc1.metric("⭐ Stars", repo.get("stargazers_count", 0))
+                            rc2.metric("🍴 Forks", repo.get("forks_count", 0))
+                            rc3.metric("🔀 Branch", repo.get("default_branch", "main"))
+                            st.caption(f"Linguagem: {repo.get('language', 'N/A')} | Atualizado: {repo.get('updated_at', '')[:10]}")
+                            st.markdown(f"[Abrir no GitHub]({repo.get('html_url', '')})")
+                else:
+                    st.info("Nenhum repositório encontrado.")
+            else:
+                st.error("Não foi possível obter dados do GitHub. Token pode estar expirado.")
+        else:
+            st.warning("⚠️ GitHub não conectado. Configure a integração GitHub no painel do Replit.")
