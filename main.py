@@ -4,276 +4,148 @@ from datetime import date
 from supabase import create_client, Client
 import os
 import time
-from github_utils import get_github_access_token, github_api, get_local_git_info
+import plotly.express as px
 
-# --- 1. CONEXÃO COM O SUPABASE ---
+# --- 1. CONFIGURAÇÕES VISUAIS ---
+LOGO_URL = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/logo-notaFacil.png"
+BG_MOBILE = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/background-nf-mob.png"
+BG_DESKTOP = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/background-nf-desktop-pc.png"
+
 try:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
-    if not url or not key:
-        st.error("❌ Chaves não encontradas nos Secrets!")
-        st.stop()
     supabase: Client = create_client(url, key)
-except Exception as e:
-    st.error(f"❌ Erro de Conexão: {e}")
+except:
+    st.error("Erro de conexão com o Banco de Dados.")
     st.stop()
 
-# --- CONFIGURAÇÃO VISUAL ---
-st.set_page_config(page_title="NotaFácil Prime", page_icon="🏆", layout="wide")
-st.markdown("""
+# --- 2. CSS RESPONSIVO ---
+st.set_page_config(page_title="NotaFácil Prime", page_icon="📊", layout="wide")
+st.markdown(f"""
     <style>
-    .stApp { background-color: #0E1117; color: #FAFAFA; }
-    div[data-testid="stMetricValue"] { color: #FFD700; } /* Dourado */
+    .stApp {{ background-attachment: fixed; background-size: cover; background-position: center; }}
+    @media (max-width: 768px) {{ .stApp {{ background-image: linear-gradient(rgba(14, 17, 23, 0.85), rgba(14, 17, 23, 0.85)), url("{BG_MOBILE}"); }} }}
+    @media (min-width: 769px) {{ .stApp {{ background-image: linear-gradient(rgba(14, 17, 23, 0.8), rgba(14, 17, 23, 0.8)), url("{BG_DESKTOP}"); }} }}
+    div[data-testid="stMetricValue"] {{ color: #FFD700 !important; font-weight: bold; }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 24px; }}
+    .stTabs [data-baseweb="tab"] {{ height: 50px; white-space: pre-wrap; background-color: rgba(255, 255, 255, 0.05); border-radius: 10px 10px 0 0; padding: 10px 20px; color: white; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES ---
-def carregar_atletas():
-    # Pega todos os atletas
-    response = supabase.table('atletas').select("*").execute()
-    return pd.DataFrame(response.data)
+# --- 3. FUNÇÕES ---
+def carregar_tudo():
+    atl = supabase.table('atletas').select("*").execute()
+    vis = supabase.table('visitantes').select("*").execute()
+    lan = supabase.table('lancamentos').select("*, atletas(nome), visitantes(nome)").execute()
+    return pd.DataFrame(atl.data), pd.DataFrame(vis.data), pd.DataFrame(lan.data)
 
-def enviar_nota_com_foto(cpf, valor, data_nota, arquivo_foto):
-    foto_url = None
+def salvar_nota(valor, data_nota, arquivo, cpf=None, v_id=None):
+    if arquivo:
+        ref = cpf if cpf else v_id
+        nome_f = f"{ref}_{int(time.time())}_{arquivo.name}"
+        supabase.storage.from_("comprovantes").upload(path=nome_f, file=arquivo.getvalue())
+        foto_url = f"{url}/storage/v1/object/public/comprovantes/{nome_f}"
 
-    # 1. Upload da Foto
-    if arquivo_foto:
-        try:
-            # Nome único para não substituir arquivos iguais
-            timestamp = int(time.time())
-            nome_arquivo = f"{cpf}_{timestamp}_{arquivo_foto.name}"
+        dados = {"valor": valor, "data_nota": str(data_nota), "status": "Pendente", "foto_url": foto_url, "atleta_cpf": cpf, "visitante_id": v_id}
+        supabase.table('lancamentos').insert(dados).execute()
 
-            arquivo_bytes = arquivo_foto.getvalue()
+        if cpf:
+            atl = supabase.table('atletas').select('saldo').eq('cpf', cpf).execute()
+            if atl.data:
+                supabase.table('atletas').update({'saldo': float(atl.data[0]['saldo']) - valor}).eq('cpf', cpf).execute()
 
-            supabase.storage.from_("comprovantes").upload(
-                path=nome_arquivo,
-                file=arquivo_bytes,
-                file_options={"content-type": arquivo_foto.type}
-            )
+# --- 4. INTERFACE ---
+st.sidebar.image(LOGO_URL, use_container_width=True)
+menu = st.sidebar.radio("Navegação", ["🏃 Lançamento", "🛡️ Sala de Guerra"])
 
-            # Monta o Link Público
-            foto_url = f"{url}/storage/v1/object/public/comprovantes/{nome_arquivo}"
+if menu == "🏃 Lançamento":
+    st.title("Lançamento de Nota")
+    df_atl, _, _ = carregar_tudo()
+    opcoes = ["Selecione..."] + df_atl['nome'].tolist() + ["Sou Visitante"]
+    escolha = st.selectbox("Quem está lançando?", opcoes)
 
-        except Exception as e:
-            st.error(f"Erro no upload da foto: {e}")
-            return # Para se der erro
+    if escolha != "Selecione...":
+        with st.form("form_v6", clear_on_submit=True):
+            v_id, cpf_atl = None, None
+            if escolha == "Sou Visitante":
+                email = st.text_input("Seu E-mail")
+                vis_res = supabase.table('visitantes').select("*").eq('email', email).execute()
+                vis = vis_res.data[0] if vis_res.data else None
+                nome_v = st.text_input("Nome", value=vis['nome'] if vis else "")
+                whats = st.text_input("WhatsApp", value=vis['whatsapp'] if vis else "")
+                canal = st.radio("Notificar por:", ["E-mail", "WhatsApp"], index=0 if not vis or vis['canal_preferido'] == 'E-mail' else 1, horizontal=True)
+            else:
+                cpf_atl = df_atl[df_atl['nome'] == escolha]['cpf'].values[0]
 
-    # 2. Salva no Banco
-    dados = {
-        "atleta_cpf": cpf,
-        "valor": valor,
-        "data_nota": str(data_nota),
-        "status": "Pendente",
-        "foto_url": foto_url
-    }
-    supabase.table('lancamentos').insert(dados).execute()
+            valor = st.number_input("Valor (R$)", min_value=0.01)
+            data = st.date_input("Data", date.today())
+            foto = st.file_uploader("📸 Comprovante", type=['jpg', 'png', 'pdf', 'jpeg'])
 
-    # 3. Abate a dívida
-    atleta = supabase.table('atletas').select('saldo').eq('cpf', cpf).execute()
-    if atleta.data:
-        saldo_atual = float(atleta.data[0]['saldo'])
-        novo_saldo = saldo_atual - valor
-        supabase.table('atletas').update({'saldo': novo_saldo}).eq('cpf', cpf).execute()
+            if st.form_submit_button("🚀 ENVIAR NOTA"):
+                if not foto: st.warning("Anexe a foto!")
+                else:
+                    if escolha == "Sou Visitante":
+                        v_res = supabase.table('visitantes').upsert({"nome": nome_v, "email": email, "whatsapp": whats, "canal_preferido": canal}, on_conflict='email').execute()
+                        v_id = v_res.data[0]['id']
+                    salvar_nota(valor, data, foto, cpf=cpf_atl, v_id=v_id)
+                    st.success("✅ Enviado com sucesso!")
+                    time.sleep(2)
+                    st.rerun()
 
-# --- INTERFACE ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2845/2845667.png", width=80)
-st.sidebar.title("NotaFácil Prime")
-menu = st.sidebar.radio("Menu", ["Área do Atleta", "Sala de Guerra (Admin)", "🔗 Git / GitHub"])
+elif menu == "🛡️ Sala de Guerra":
+    st.title("🛡️ Painel Estratégico")
+    if st.sidebar.text_input("Senha Admin", type="password") == "admin":
+        df_atl, df_vis, df_lan = carregar_tudo()
 
-# === TELA DO ATLETA ===
-if menu == "Área do Atleta":
-    st.title("🏃 Área do Atleta")
-    st.info("💡 Dica: Oculte o menu lateral para ter mais privacidade.")
+        aba1, aba2 = st.tabs(["📊 Dashboard BI", "📋 Auditoria de Notas"])
 
-    try:
-        df_atletas = carregar_atletas()
-        if not df_atletas.empty:
-            nomes = df_atletas['nome'].tolist()
-            nome = st.selectbox("Identifique-se:", nomes)
-            # Pega o CPF do nome escolhido
-            cpf = df_atletas[df_atletas['nome'] == nome]['cpf'].values[0]
+        with aba1:
+            st.subheader("Inteligência Financeira")
 
-            st.divider()
-
-            with st.form("form_nota"):
-                st.write(f"Olá, **{nome}**! Qual o valor do reembolso?")
-                col1, col2 = st.columns(2)
-                with col1:
-                    valor = st.number_input("Valor (R$)", min_value=0.01, step=0.01)
-                with col2:
-                    data = st.date_input("Data do Comprovante", date.today())
-
-                arquivo = st.file_uploader("📸 Foto do Comprovante (Obrigatório)", type=['jpg', 'png', 'pdf', 'jpeg'])
-
-                botao = st.form_submit_button("🚀 ENVIAR COMPROVANTE")
-
-                if botao:
-                    if not arquivo:
-                        st.warning("⚠️ É obrigatório anexar a foto!")
-                    else:
-                        with st.spinner("Enviando e atualizando saldo..."):
-                            enviar_nota_com_foto(cpf, valor, data, arquivo)
-                            st.success("✅ Recebido! Seu saldo foi atualizado.")
-                            time.sleep(2)
-                            st.rerun()
-    except Exception as e:
-        st.error(f"Erro ao carregar sistema: {e}")
-
-# === TELA DO ADMIN ===
-elif menu == "Sala de Guerra (Admin)":
-    st.title("🛡️ Sala de Guerra")
-    senha = st.sidebar.text_input("Senha Admin", type="password")
-
-    if senha == "admin":
-        if st.button("🔄 Atualizar Dados"): st.rerun()
-
-        df_atletas = carregar_atletas()
-
-        if not df_atletas.empty:
-            # Lógica dos 80%
-            df_atletas['Limite'] = df_atletas['bolsa'] * 0.80
-            df_atletas['Status'] = df_atletas.apply(lambda x: '🚨 CRÍTICO' if x['saldo'] >= x['Limite'] else '✅ Em Dia', axis=1)
-
-            # KPIs
-            total = df_atletas['saldo'].sum()
-            criticos = df_atletas[df_atletas['Status'] == '🚨 CRÍTICO'].shape[0]
-
+            # KPIs de Topo
             c1, c2, c3 = st.columns(3)
-            c1.metric("Total a Receber", f"R$ {total:,.2f}")
-            c2.metric("Atletas Críticos", f"{criticos}")
-            c3.metric("Total Cadastrados", f"{len(df_atletas)}")
+            total_reembolsado = df_lan['valor'].sum()
+            c1.metric("Total Reembolsado", f"R$ {total_reembolsado:,.2f}")
+            c2.metric("Pendência Atletas", f"R$ {df_atl['saldo'].sum():,.2f}")
+            c3.metric("Lançamentos", len(df_lan))
 
             st.divider()
-            st.subheader("📋 Situação Financeira")
 
-            # Tabela de Devedores
-            st.dataframe(
-                df_atletas[['nome', 'saldo', 'Status']].sort_values('saldo', ascending=False),
-                column_config={
-                    "nome": "Atleta",
-                    "saldo": st.column_config.NumberColumn("Saldo Devedor", format="R$ %.2f")
-                },
-                use_container_width=True,
-                hide_index=True
-            )
+            col_esq, col_dir = st.columns(2)
 
+            with col_esq:
+                # 1. Gráfico de Evolução Mensal
+                df_lan['mes_ano'] = pd.to_datetime(df_lan['data_nota']).dt.strftime('%m/%Y')
+                gastos_mes = df_lan.groupby('mes_ano')['valor'].sum().reset_index()
+                fig_bar = px.bar(gastos_mes, x='mes_ano', y='valor', title="Evolução Mensal (R$)",
+                                 color_discrete_sequence=['#FFD700'], template="plotly_dark")
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+            with col_dir:
+                # 2. Distribuição Atleta vs Visitante
+                df_lan['Tipo'] = df_lan['atleta_cpf'].apply(lambda x: 'Atleta' if pd.notnull(x) else 'Visitante')
+                dist_tipo = df_lan.groupby('Tipo')['valor'].sum().reset_index()
+                fig_pie = px.pie(dist_tipo, values='valor', names='Tipo', title="Origem dos Gastos",
+                                 color_discrete_sequence=['#FFD700', '#C0C0C0'], hole=.4, template="plotly_dark")
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            # 3. Termômetro de Orçamento (Exemplo: Meta de R$ 5.000,00 por mês)
             st.divider()
-            st.subheader("📥 Últimos Lançamentos (Auditoria)")
+            limite_mensal = 5000.00
+            gasto_atual = df_lan[pd.to_datetime(df_lan['data_nota']).dt.month == date.today().month]['valor'].sum()
+            progresso = min(gasto_atual / limite_mensal, 1.0)
 
-            # Busca lançamentos
-            lancamentos = supabase.table('lancamentos').select("*").order('created_at', desc=True).limit(10).execute()
+            st.write(f"**Uso do Orçamento Mensal (Meta: R$ {limite_mensal:,.2f})**")
+            st.progress(progresso)
+            st.write(f"Já utilizamos **{progresso*100:.1f}%** do planejado para este mês.")
 
-            if lancamentos.data:
-                df_lanc = pd.DataFrame(lancamentos.data)
-
-                # --- A MÁGICA: TROCAR CPF POR NOME ---
-                # 1. Pega só CPF e Nome da tabela de atletas
-                df_nomes = df_atletas[['cpf', 'nome']]
-
-                # 2. Cruza as tabelas (Join)
-                df_final = pd.merge(df_lanc, df_nomes, left_on='atleta_cpf', right_on='cpf', how='left')
-
-                # 3. Exibe bonito
-                st.dataframe(
-                    df_final[['nome', 'valor', 'data_nota', 'foto_url']],
-                    column_config={
-                        "nome": "Atleta",
-                        "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
-                        "data_nota": st.column_config.DateColumn("Data"),
-                        "foto_url": st.column_config.LinkColumn("Comprovante")
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Nenhum lançamento encontrado.")
+        with aba2:
+            st.subheader("Auditoria de Lançamentos")
+            if not df_lan.empty:
+                df_lan['Quem'] = df_lan.apply(lambda r: r['atletas']['nome'] if r['atletas'] else f"Vis: {r['visitantes']['nome']}", axis=1)
+                st.dataframe(df_lan[['Quem', 'valor', 'data_nota', 'status', 'foto_url']], 
+                             column_config={"foto_url": st.column_config.LinkColumn("Ver Foto"), 
+                                            "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f")},
+                             use_container_width=True, hide_index=True)
     else:
-        st.warning("🔒 Área restrita.")
-
-# === TELA GIT / GITHUB ===
-elif menu == "🔗 Git / GitHub":
-    st.title("🔗 Git / GitHub")
-
-    tab_local, tab_github = st.tabs(["📁 Git Local", "🐙 GitHub"])
-
-    with tab_local:
-        st.subheader("Repositório Local")
-
-        if st.button("🔄 Atualizar Info Git"):
-            st.rerun()
-
-        git_info = get_local_git_info()
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("Branch Atual", git_info["branch"])
-        with c2:
-            st.metric("Arquivos Modificados", len(git_info["status"]))
-
-        if git_info["status"]:
-            st.subheader("📝 Arquivos com Alterações")
-            for item in git_info["status"]:
-                parts = item.strip().split(None, 1)
-                if len(parts) == 2:
-                    status_code, filename = parts
-                    labels = {
-                        "M": "🟡 Modificado",
-                        "A": "🟢 Adicionado",
-                        "D": "🔴 Removido",
-                        "??": "⚪ Não rastreado",
-                        "R": "🔵 Renomeado",
-                    }
-                    label = labels.get(status_code, f"📄 {status_code}")
-                    st.text(f"  {label}  →  {filename}")
-                else:
-                    st.text(f"  {item}")
-        else:
-            st.success("✅ Nenhuma alteração pendente.")
-
-        if git_info["recent_commits"]:
-            st.subheader("📜 Últimos Commits")
-            for commit in git_info["recent_commits"]:
-                st.code(commit, language=None)
-
-        if git_info["remote"]:
-            st.subheader("🌐 Repositórios Remotos")
-            st.code(git_info["remote"], language=None)
-
-    with tab_github:
-        st.subheader("Conta GitHub Conectada")
-
-        token = get_github_access_token()
-
-        if token:
-            user = github_api("/user", token)
-            if user:
-                col_avatar, col_info = st.columns([1, 3])
-                with col_avatar:
-                    st.image(user.get("avatar_url", ""), width=100)
-                with col_info:
-                    st.markdown(f"### {user.get('name', user.get('login', 'Usuário'))}")
-                    st.text(f"@{user.get('login', '')}")
-                    if user.get("bio"):
-                        st.caption(user["bio"])
-                    st.markdown(f"[Perfil GitHub](https://github.com/{user.get('login', '')})")
-
-                st.divider()
-                st.subheader("📂 Seus Repositórios")
-
-                repos = github_api("/user/repos?sort=updated&per_page=15", token)
-                if repos:
-                    for repo in repos:
-                        with st.expander(f"{'🔒' if repo.get('private') else '📂'} {repo['full_name']}"):
-                            st.write(repo.get("description") or "_Sem descrição_")
-                            rc1, rc2, rc3 = st.columns(3)
-                            rc1.metric("⭐ Stars", repo.get("stargazers_count", 0))
-                            rc2.metric("🍴 Forks", repo.get("forks_count", 0))
-                            rc3.metric("🔀 Branch", repo.get("default_branch", "main"))
-                            st.caption(f"Linguagem: {repo.get('language', 'N/A')} | Atualizado: {repo.get('updated_at', '')[:10]}")
-                            st.markdown(f"[Abrir no GitHub]({repo.get('html_url', '')})")
-                else:
-                    st.info("Nenhum repositório encontrado.")
-            else:
-                st.error("Não foi possível obter dados do GitHub. Token pode estar expirado.")
-        else:
-            st.warning("⚠️ GitHub não conectado. Configure a integração GitHub no painel do Replit.")
+        st.warning("Aguardando senha do Administrador...")
