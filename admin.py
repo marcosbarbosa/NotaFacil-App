@@ -10,7 +10,6 @@ def exibir_sala_de_guerra():
         atl_data, vis_data, lan_data = db.carregar_dados_globais()
         tab_fin, tab_usr = st.tabs(["📊 Auditoria Financeira", "👥 Gestão de Usuários"])
 
-        # CORREÇÃO: Identificação Segura (Blinda o erro de 'NoneType')
         user_logado = st.session_state.get('usuario_logado')
         admin_atual = user_logado.get('nome', 'Administrador Local') if isinstance(user_logado, dict) else 'Administrador Local'
 
@@ -32,7 +31,6 @@ def exibir_sala_de_guerra():
                                   use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
                 if ev.selection.rows: id_sel = df_f.iloc[ev.selection.rows[0]]['id']
 
-                # --- PAINEL DE EXPORTAÇÃO DE RELATÓRIO ---
                 with st.expander("📤 Exportar / Enviar Relatório por E-mail", expanded=False):
                     st.info(f"O relatório conterá as **{len(df_f)} notas** listadas na tabela acima, totalizando **R$ {df_f['valor'].sum():,.2f}**.")
                     dest = st.text_input("E-mail do Destinatário (ex: diretoria@nsg.com):")
@@ -42,7 +40,6 @@ def exibir_sala_de_guerra():
                                 html_body = f_adm.montar_html_relatorio(df_f, mes, ano, st_f)
                                 assunto = f"Relatório de Auditoria ({mes}/{ano}) - Status: {st_f}"
                                 str_filtros = f"Mês: {mes}, Ano: {ano}, Status: {st_f}"
-
                                 ok, msg = db.enviar_relatorio_email(dest, assunto, html_body, admin_atual, str_filtros, len(df_f))
                                 if ok: st.success(msg)
                                 else: st.error(msg)
@@ -72,7 +69,6 @@ def exibir_sala_de_guerra():
                                 db.alterar_status_nota(nota['id'], nota['atleta_cpf'], nota['valor'], nota['Status_UI'], "✅ Aprovada"); st.rerun()
                             if st.button("❌ Reprovar", use_container_width=True):
                                 db.alterar_status_nota(nota['id'], nota['atleta_cpf'], nota['valor'], nota['Status_UI'], "❌ Reprovada"); st.rerun()
-
                             st.divider()
                             if st.button("🗑️ Apagar Nota do Banco", use_container_width=True, type="primary"):
                                 ok, msg = db.excluir_nota_fiscal(nota['id'], nota['atleta_cpf'], nota['valor'], nota['Status_UI'])
@@ -81,6 +77,21 @@ def exibir_sala_de_guerra():
 
         # --- ABA 2: GESTÃO & BI ---
         with tab_usr:
+
+            # --- NOVO: SELETOR DE TEMAS ---
+            with st.expander("🎨 Personalização Visual (Temas)", expanded=False):
+                st.write("**Escolha o padrão de fundo e contraste do sistema:**")
+                c_t1, c_t2, c_t3, c_t4 = st.columns(4)
+                if c_t1.button("🌌 Fundo Imagem", use_container_width=True):
+                    st.session_state.tema_escolhido = "imagem"; st.rerun()
+                if c_t2.button("🌑 Fundo Preto", use_container_width=True):
+                    st.session_state.tema_escolhido = "preto"; st.rerun()
+                if c_t3.button("📓 Fundo Cinza", use_container_width=True):
+                    st.session_state.tema_escolhido = "cinza"; st.rerun()
+                if c_t4.button("⚪ Fundo Branco", use_container_width=True):
+                    st.session_state.tema_escolhido = "branco"; st.rerun()
+            # --------------------------------
+
             grafico = f_adm.gerar_grafico_consumo(atl_data)
             if grafico: st.plotly_chart(grafico, use_container_width=True)
             st.divider()
@@ -164,4 +175,4 @@ def exibir_sala_de_guerra():
 
     else: st.info("Restrito.")
 
-# [admin.py][Correção de Sessão Segura e Tratamento de NoneType][2026-02-24 23:00][v6.9][181 linhas]
+# [admin.py][Seletor de Temas Integrado ao Gestor][2026-02-25 06:15][v6.10][193 linhas]

@@ -3,14 +3,17 @@ from datetime import date
 import time
 import database as db, styles as ui, admin as adm
 
-ui.aplicar_design()
-
+# Controle de Memória de Sessão
 if "tela" not in st.session_state: st.session_state.tela = "lancamento"
 if "res_data" not in st.session_state: st.session_state.res_data = {}
 if "usuario_logado" not in st.session_state: st.session_state.usuario_logado = None
 if "mostra_cadastro" not in st.session_state: st.session_state.mostra_cadastro = False
+if "tema_escolhido" not in st.session_state: st.session_state.tema_escolhido = "preto" # Padrão Elegante
 
-# --- MOTOR GERADOR DE SENHA DINÂMICA ---
+# Aplica o design baseado na escolha do Admin
+ui.aplicar_design(st.session_state.tema_escolhido)
+
+# --- MOTOR GERADOR DE SENHA DINÂMICA= ---
 def gerar_senha_padrao(email, nome):
     if email and "@" in email:
         prefixo = email.split("@")[0]
