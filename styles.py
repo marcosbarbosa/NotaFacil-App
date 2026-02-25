@@ -14,11 +14,13 @@ def get_base64_of_bin_file(bin_file):
         return ""
 
 def aplicar_design(tema="branco"):
-    """Motor Dinâmico de Temas com Acessibilidade Visual Garantida"""
+    """Motor Dinâmico de Temas com Dupla Camada de Segurança para Imagens"""
 
     # 1. DEFINIÇÃO DE FUNDO E FONTES COM BASE NO TEMA
     if tema == "imagem":
+        # TENTATIVA 1: Arquivo Local (Mais rápido e seguro)
         img_base64 = get_base64_of_bin_file("background-nf-prime-mob.png")
+
         if img_base64:
             fundo_css = f"""
             [data-testid="stAppViewContainer"] {{
@@ -32,7 +34,19 @@ def aplicar_design(tema="branco"):
             }}
             """
         else:
-            fundo_css = """[data-testid="stAppViewContainer"] { background-color: #0E1117; }"""
+            # TENTATIVA 2: Fallback na Web (Busca no seu GitHub se não achar localmente)
+            bg_url = "https://raw.githubusercontent.com/marcosbarbosaam/Streamlit-Core/main/background-nf-prime-mob.png"
+            fundo_css = f"""
+            [data-testid="stAppViewContainer"] {{
+                background-image: url("{bg_url}");
+                background-size: cover; 
+                background-position: center;
+                background-attachment: fixed;
+            }}
+            [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 {{ 
+                color: #FFFFFF !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important; 
+            }}
+            """
 
     elif tema == "preto":
         fundo_css = """
@@ -103,4 +117,4 @@ def aplicar_design(tema="branco"):
     """
     st.markdown(css_base, unsafe_allow_html=True)
 
-# [styles.py][Correção de Acessibilidade e Contraste de Botões][2026-02-25 10:52
+# [styles.py][Correção Base64 Dupla Camada e Acessibilidade][2026-02-25 18:20][v2.6][113 linhas]
