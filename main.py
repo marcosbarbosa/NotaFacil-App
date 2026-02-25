@@ -24,7 +24,14 @@ ui.aplicar_design(st.session_state.tema_escolhido)
 # 2. CONSTRUÇÃO DA BARRA LATERAL E LOGOMARCA ANTI-CRASH
 # -------------------------------------------------------------
 try:
-    if os.path.exists("logo.png"):
+    # ATUALIZAÇÃO: Rede de captura robusta para todas as extensões!
+    if os.path.exists("logo-notaFacil.png"):
+        logo_img = Image.open("logo-notaFacil.png")
+        st.sidebar.image(logo_img, use_container_width=True)
+    elif os.path.exists("logo-notaFacil.jpg"):
+        logo_img = Image.open("logo-notaFacil.jpg")
+        st.sidebar.image(logo_img, use_container_width=True)
+    elif os.path.exists("logo.png"):
         logo_img = Image.open("logo.png")
         st.sidebar.image(logo_img, use_container_width=True)
     elif os.path.exists("Logo.png"):
@@ -65,4 +72,4 @@ elif menu == "🏛️ Central de Governança":
     st.title("🏛️ Central de Governança")
     adm.exibir_sala_de_guerra()
 
-# [main.py][Otimização de UI e Menu Desobstruído][2026-02-25 15:30][v27.1][66 linhas]
+# [main.py][Injeção da Logomarca PNG com Múltiplas Capturas][2026-02-25 18:45][v27.3][76 linhas]
