@@ -1,23 +1,48 @@
-# ==============================================================================
-# SISTEMA: NotaFácil Prime | ARQUIVO: styles.py
-# DATA: 19/02/2026 | HORA: 13:00 | TÍTULO: Design & Assets v1.2
-# FUNÇÃO: Centralização de CSS e Estilos de Feedback
-# VERSÃO: 1.2 | LINHAS: 28
-# ==============================================================================
 import streamlit as st
 
-LOGO_URL = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/logo-notaFacil.png"
-BG_MOBILE = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/background-nf-mob.png"
-BG_DESKTOP = "https://qqvruwobaqfvnrbmnfnq.supabase.co/storage/v1/object/public/comprovantes/background-nf-desktop-pc.png"
+# Mantenha a URL da sua logo
+LOGO_URL = "https://sua-logo-aqui.com/logo.png" # Substitua pela sua URL real
 
 def aplicar_design():
-    st.markdown(f"""
-        <style>
-        .stApp {{ background-attachment: fixed; background-size: cover; background-position: center; }}
-        @media (max-width: 768px) {{ .stApp {{ background-image: linear-gradient(rgba(14, 17, 23, 0.9), rgba(14, 17, 23, 0.9)), url("{BG_MOBILE}"); }} }}
-        @media (min-width: 769px) {{ .stApp {{ background-image: linear-gradient(rgba(14, 17, 23, 0.8), rgba(14, 17, 23, 0.8)), url("{BG_DESKTOP}"); }} }}
-        div[data-testid="stMetricValue"] {{ color: #FFD700 !important; font-weight: bold; }}
-        .success-box {{ background: rgba(0, 255, 0, 0.05); padding: 25px; border-radius: 15px; border: 2px solid #2ecc71; text-align: center; }}
-        </style>
-        """, unsafe_allow_html=True)
-# Quantidade total de linhas: 28
+    # Aqui pode estar o seu CSS de imagem de fundo...
+
+    # --- NOVO: PATCH DE CONTRASTE EXECUTIVO ---
+    css_contraste = """
+    <style>
+    /* 1. Força texto branco e sombra na área principal para saltar do fundo escuro */
+    [data-testid="stAppViewContainer"] h1, 
+    [data-testid="stAppViewContainer"] h2, 
+    [data-testid="stAppViewContainer"] h3, 
+    [data-testid="stAppViewContainer"] p, 
+    [data-testid="stAppViewContainer"] label, 
+    [data-testid="stAppViewContainer"] span {
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+    }
+
+    /* 2. Mantém o texto PRETO dentro das caixas de digitação para não sumir o que o usuário digita */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] {
+        color: #000000 !important;
+        text-shadow: none !important;
+        background-color: #FFFFFF !important;
+    }
+
+    /* 3. Protege a Barra Lateral (Sidebar) mantendo a cor escura, pois o fundo dela é claro */
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] h1 {
+        color: #1E1E1E !important;
+        text-shadow: none !important;
+    }
+
+    /* 4. Blinda as Métricas (Cards de Saldo) para ficarem brilhantes e visíveis */
+    [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+    }
+    </style>
+    """
+    st.markdown(css_contraste, unsafe_allow_html=True)
+
+# [styles.py][Patch de Alta Legibilidade e Text-Shadow][2026-02-25 05:40][v1.5]
