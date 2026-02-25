@@ -114,6 +114,7 @@ if menu == "🏃 Lançamento":
         st.write(f"**Atleta Beneficiado:** 🏃 {res['atleta_nome']} | **Categoria:** {res['atleta_tag']}")
         c1, c2 = st.columns(2)
         c1.metric("Valor NF", f"R$ {res['valor']:,.2f}")
+        # AQUI CHAMAMOS A FUNÇÃO RESTAURADA DO DATABASE.PY
         c2.metric("Novo Saldo Meta", db.formatar_saldo_mask(res['saldo'], True))
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -155,10 +156,11 @@ if menu == "🏃 Lançamento":
                     v_id = st.session_state.usuario_logado['id'] if st.session_state.usuario_logado['tipo'] == 'visitante' else None
                     db.salvar_nota_fiscal(val, date.today(), ft, cpf=cpf_b, v_id=v_id)
 
-                    atl_res = next(a for a in db.carregar_dados_globais()[0] if a['cpf'] == cpf_b)
-                    tag = db.calcular_tag_3x3(atl_res['sexo'], atl_res['data_nascimento'])
+                    # Buscamos apena os atletas na segunda vez para montar o resumo, não o banco inteiro.
+                    atl_res_novo = next(a for a in db.carregar_dados_globais()[0] if a['cpf'] == cpf_b)
+                    tag = db.calcular_tag_3x3(atl_res_novo['sexo'], atl_res_novo['data_nascimento'])
 
-                    st.session_state.res_data = {"valor": val, "saldo": atl_res['saldo'], "atleta_nome": atl_res['nome'], "atleta_tag": tag}
+                    st.session_state.res_data = {"valor": val, "saldo": atl_res_novo['saldo'], "atleta_nome": atl_res_novo['nome'], "atleta_tag": tag}
                     st.session_state.tela = "resumo"
                     st.rerun()
 
@@ -166,4 +168,4 @@ elif menu == "🛡️ Sala de Guerra":
     st.title("🛡️ Sala de Guerra")
     adm.exibir_sala_de_guerra()
 
-# [main.py][Motor de Autenticação e Lançamento][2026-02-24 18:30][v24.0][168 linhas]
+# [main.py][Motor de Autenticação e Lançamento][2026-02-24 22:00][v24.1][168 linhas]
