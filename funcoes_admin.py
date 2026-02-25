@@ -27,21 +27,23 @@ def exibir_origem_com_saldo(atleta, operador, saldo):
     c2.info(f"**Operador:** {operador}")
     if saldo is not None:
         cor = "normal" if saldo > 0 else "inverse"
-        c3.metric("Saldo Atual", f"R$ {float(saldo):,.2f}", delta_color=cor)
-    else: c3.metric("Saldo Atual", "N/A")
+        c3.metric("Saldo Disponível", f"R$ {float(saldo):,.2f}", delta_color=cor)
+    else: c3.metric("Saldo Disponível", "N/A")
 
 def gerar_grafico_consumo(atl_data):
-    """Gera o mapa de calor financeiro por atleta"""
+    """Gera o mapa de calor financeiro com nomenclatura clara para o BI"""
     if not atl_data: return None
     df = pd.DataFrame(atl_data)
-    # Garante a leitura da coluna real do seu banco
     col_bolsa = 'bolsa' if 'bolsa' in df.columns else 'limite_mensal'
     if col_bolsa in df.columns and 'saldo' in df.columns:
-        df['Consumo (R$)'] = df[col_bolsa].astype(float) - df['saldo'].astype(float)
-        df_plot = df[df['Consumo (R$)'] > 0].sort_values('Consumo (R$)', ascending=False)
+        # A matemática clara: Bolsa - Saldo = O que já foi entregue em NFs
+        df['NFs Entregues (R$)'] = df[col_bolsa].astype(float) - df['saldo'].astype(float)
+        df_plot = df[df['NFs Entregues (R$)'] > 0].sort_values('NFs Entregues (R$)', ascending=False)
         if df_plot.empty: return None
-        fig = px.bar(df_plot, x='nome', y='Consumo (R$)', text_auto='.2f', title="🔥 Consumo de Bolsa por Atleta", color='Consumo (R$)', color_continuous_scale='Reds')
+        fig = px.bar(df_plot, x='nome', y='NFs Entregues (R$)', text_auto='.2f', 
+                     title="📊 Volume de NFs Entregues por Atleta", 
+                     color='NFs Entregues (R$)', color_continuous_scale='Reds')
         return fig
     return None
 
-# [funcoes_admin.py][Inteligência Gráfica BI Integrada][2026-02-24 21:35][v1.12][40 linhas]
+# [funcoes_admin.py][Inteligência Gráfica BI Descomplicada][2026-02-24 22:45][v1.13][40 linhas]
