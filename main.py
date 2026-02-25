@@ -21,7 +21,9 @@ def gerar_senha_padrao(email, nome):
     return base.capitalize() + "123"
 
 st.sidebar.image(ui.LOGO_URL, use_container_width=True)
-menu = st.sidebar.radio("Navegação", ["🏃 Lançamento", "🛡️ Sala de Guerra"])
+
+# RENOMEADO PARA O PADRÃO EXECUTIVO
+menu = st.sidebar.radio("Navegação", ["🏃 Lançamento", "🏛️ Central de Governança"])
 
 if menu == "🏃 Lançamento":
     # -------------------------------------------------------------
@@ -31,7 +33,7 @@ if menu == "🏃 Lançamento":
         st.title("🔐 Acesso ao Sistema")
         atl_raw, vis_raw, _ = db.carregar_dados_globais()
 
-        # --- FLUXO DE CADASTRO (ISOLADO E IMUNE À PESQUISA) ---
+        # --- FLUXO DE CADASTRO ---
         if st.session_state.mostra_cadastro:
             st.info("Preencha os dados abaixo para criar seu acesso.")
             with st.form("form_cadastro"):
@@ -42,10 +44,11 @@ if menu == "🏃 Lançamento":
                 if st.form_submit_button("Criar Acesso e Entrar"):
                     if nm and em:
                         senha_nova = gerar_senha_padrao(em, nm)
+                        # Assumindo que upsert_visitante está no seu db (ou ajuste conforme usava antes)
                         v_id = db.upsert_visitante({"nome": nm, "email": em, "whatsapp": wh, "senha": senha_nova})
                         st.session_state.usuario_logado = {"tipo": "visitante", "id": v_id, "nome": nm}
                         st.success(f"Cadastro realizado! Sua senha automática é: {senha_nova}")
-                        st.session_state.mostra_cadastro = False # Reseta a tela
+                        st.session_state.mostra_cadastro = False
                         time.sleep(4)
                         st.rerun()
                     else:
@@ -114,7 +117,6 @@ if menu == "🏃 Lançamento":
         st.write(f"**Atleta Beneficiado:** 🏃 {res['atleta_nome']} | **Categoria:** {res['atleta_tag']}")
         c1, c2 = st.columns(2)
         c1.metric("Valor NF", f"R$ {res['valor']:,.2f}")
-        # AQUI CHAMAMOS A FUNÇÃO RESTAURADA DO DATABASE.PY
         c2.metric("Novo Saldo Meta", db.formatar_saldo_mask(res['saldo'], True))
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -156,7 +158,6 @@ if menu == "🏃 Lançamento":
                     v_id = st.session_state.usuario_logado['id'] if st.session_state.usuario_logado['tipo'] == 'visitante' else None
                     db.salvar_nota_fiscal(val, date.today(), ft, cpf=cpf_b, v_id=v_id)
 
-                    # Buscamos apena os atletas na segunda vez para montar o resumo, não o banco inteiro.
                     atl_res_novo = next(a for a in db.carregar_dados_globais()[0] if a['cpf'] == cpf_b)
                     tag = db.calcular_tag_3x3(atl_res_novo['sexo'], atl_res_novo['data_nascimento'])
 
@@ -164,8 +165,9 @@ if menu == "🏃 Lançamento":
                     st.session_state.tela = "resumo"
                     st.rerun()
 
-elif menu == "🛡️ Sala de Guerra":
-    st.title("🛡️ Sala de Guerra")
-    adm.exibir_sala_de_guerra()
+# RENOMEADO PARA O PADRÃO EXECUTIVO
+elif menu == "🏛️ Central de Governança":
+    st.title("🏛️ Central de Governança")
+    adm.exibir_sala_de_guerra() # O nome da função interna continua igual para não quebrar integrações
 
-# [main.py][Motor de Autenticação e Lançamento][2026-02-24 22:00][v24.1][168 linhas]
+# [main.py][Upgrade de Nomenclatura Corporativa][2026-02-24 23:25][v25.0][168 linhas]

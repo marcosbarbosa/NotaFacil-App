@@ -10,6 +10,10 @@ def exibir_sala_de_guerra():
         atl_data, vis_data, lan_data = db.carregar_dados_globais()
         tab_fin, tab_usr = st.tabs(["📊 Auditoria Financeira", "👥 Gestão de Usuários"])
 
+        # CORREÇÃO: Identificação Segura (Blinda o erro de 'NoneType')
+        user_logado = st.session_state.get('usuario_logado')
+        admin_atual = user_logado.get('nome', 'Administrador Local') if isinstance(user_logado, dict) else 'Administrador Local'
+
         # --- ABA 1: AUDITORIA ---
         with tab_fin:
             c1, c2, c3 = st.columns(3)
@@ -27,6 +31,22 @@ def exibir_sala_de_guerra():
                                   column_config={"foto_url": st.column_config.ImageColumn("NF"), "valor": st.column_config.NumberColumn("R$", format="%.2f")},
                                   use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
                 if ev.selection.rows: id_sel = df_f.iloc[ev.selection.rows[0]]['id']
+
+                # --- PAINEL DE EXPORTAÇÃO DE RELATÓRIO ---
+                with st.expander("📤 Exportar / Enviar Relatório por E-mail", expanded=False):
+                    st.info(f"O relatório conterá as **{len(df_f)} notas** listadas na tabela acima, totalizando **R$ {df_f['valor'].sum():,.2f}**.")
+                    dest = st.text_input("E-mail do Destinatário (ex: diretoria@nsg.com):")
+                    if st.button("📧 Gerar e Enviar Relatório", type="primary"):
+                        if "@" in dest:
+                            with st.spinner("Compilando dados e disparando e-mail..."):
+                                html_body = f_adm.montar_html_relatorio(df_f, mes, ano, st_f)
+                                assunto = f"Relatório de Auditoria ({mes}/{ano}) - Status: {st_f}"
+                                str_filtros = f"Mês: {mes}, Ano: {ano}, Status: {st_f}"
+
+                                ok, msg = db.enviar_relatorio_email(dest, assunto, html_body, admin_atual, str_filtros, len(df_f))
+                                if ok: st.success(msg)
+                                else: st.error(msg)
+                        else: st.warning("Por favor, insira um e-mail válido.")
 
                 st.divider()
                 with st.expander("🔍 Auditoria Detalhada", expanded=(id_sel is not None)):
@@ -68,25 +88,13 @@ def exibir_sala_de_guerra():
             if "lote_key" not in st.session_state: st.session_state.lote_key = 0
             st.subheader("👥 Lista de Acessos")
 
-            # --- NOVO: TABELA COM TRIPÉ FINANCEIRO CLARO ---
             u_l = []
             for a in atl_data:
                 b_val = float(a.get('bolsa') or a.get('limite_mensal') or 0.0)
                 s_val = float(a.get('saldo') or 0.0)
-                nfs_entregues = b_val - s_val
-                u_l.append({
-                    "Nome": a['nome'], "Tipo": "🏃 Atleta", 
-                    "Bolsa Total": f"R$ {b_val:,.2f}", 
-                    "NFs Entregues": f"R$ {nfs_entregues:,.2f}", 
-                    "Saldo Restante": f"R$ {s_val:,.2f}", 
-                    "Email": a.get('email', '-')
-                })
+                u_l.append({"Nome": a['nome'], "Tipo": "🏃 Atleta", "Bolsa Total": f"R$ {b_val:,.2f}", "NFs Entregues": f"R$ {(b_val - s_val):,.2f}", "Saldo Restante": f"R$ {s_val:,.2f}", "Email": a.get('email', '-')})
             for v in vis_data:
-                u_l.append({
-                    "Nome": v['nome'], "Tipo": "👤 Visitante", 
-                    "Bolsa Total": "-", "NFs Entregues": "-", "Saldo Restante": "-", 
-                    "Email": v.get('email', '-')
-                })
+                u_l.append({"Nome": v['nome'], "Tipo": "👤 Visitante", "Bolsa Total": "-", "NFs Entregues": "-", "Saldo Restante": "-", "Email": v.get('email', '-')})
 
             st.dataframe(pd.DataFrame(u_l).sort_values("Nome"), use_container_width=True, hide_index=True)
 
@@ -156,4 +164,4 @@ def exibir_sala_de_guerra():
 
     else: st.info("Restrito.")
 
-# [admin.py][Refatoração de UX Financeira: Nomenclatura Direta][2026-02-24 22:45][v6.7][166 linhas]
+# [admin.py][Correção de Sessão Segura e Tratamento de NoneType][2026-02-24 23:00][v6.9][181 linhas]
