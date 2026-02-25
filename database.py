@@ -1,10 +1,7 @@
 import os
 import time
-import smtplib
 import pandas as pd
 from datetime import date
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from supabase import create_client, Client
 
 def conectar():
@@ -14,12 +11,25 @@ def conectar():
 
 supabase = conectar()
 
+# --- REGRAS DE NEGÓCIO E CONSULTAS (READ) ---
 def carregar_dados_globais():
     atl = supabase.table('atletas').select("*").execute()
     vis = supabase.table('visitantes').select("*").execute()
     lan = supabase.table('lancamentos').select("*, atletas(nome, email, cpf, saldo), visitantes(nome, email)").order('created_at', desc=True).execute()
     return atl.data, vis.data, lan.data
 
+def calcular_tag_3x3(sexo, data_nasc):
+    if not data_nasc or not sexo: return "⚪ SEM_DADOS"
+    h = date.today()
+    n = pd.to_datetime(data_nasc).date()
+    idade = h.year - n.year - ((h.month, h.day) < (n.month, n.day))
+    return "🟪 3X3_FEM" if sexo == "F" else ("🟦 3X3_M_BASE" if idade <= 18 else "🟥 3X3_M_ELITE")
+
+def formatar_saldo_mask(saldo, privilegiado=False):
+    TETO = 500.0
+    return f"R$ {float(saldo):,.2f}" if privilegiado or float(saldo) <= TETO else f"R$ {TETO:,.0f}+"
+
+# --- OPERAÇÕES FINANCEIRAS (NOTAS FISCAIS) ---
 def salvar_nota_fiscal(valor, data, arquivo, cpf=None, v_id=None):
     if arquivo:
         ref = cpf if cpf else v_id
@@ -41,13 +51,6 @@ def vincular_atleta_a_nota(id_nota, cpf_atleta, valor_nota):
         return True, "Beneficiário vinculado!"
     except Exception as e: return False, f"Erro: {str(e)}"
 
-def cadastrar_novo_atleta(nome, cpf, data_nasc, sexo, limite, email, senha):
-    dados = {"nome": nome, "cpf": cpf, "data_nascimento": str(data_nasc), "sexo": sexo, "bolsa": float(limite), "limite_mensal": float(limite), "saldo": float(limite), "email": email, "senha": senha, "categoria": "Base"}
-    try:
-        supabase.table('atletas').insert(dados).execute()
-        return True, "Sucesso"
-    except Exception as e: return (False, f"CPF {cpf} já cadastrado.") if "duplicate key" in str(e) else (False, str(e))
-
 def alterar_status_nota(id_nota, cpf_atleta, valor, status_curr, status_new):
     status_limpo = status_new.replace("⚠️ ", "").replace("✅ ", "").replace("❌ ", "")
     supabase.table('lancamentos').update({'status': status_limpo}).eq('id', id_nota).execute()
@@ -67,6 +70,14 @@ def excluir_nota_fiscal(id_nota, cpf_atleta, valor, status_curr):
         supabase.table('lancamentos').delete().eq('id', id_nota).execute()
         return True, "Nota excluída!"
     except Exception as e: return False, str(e)
+
+# --- GESTÃO DE USUÁRIOS (CRUD) ---
+def cadastrar_novo_atleta(nome, cpf, data_nasc, sexo, limite, email, senha):
+    dados = {"nome": nome, "cpf": cpf, "data_nascimento": str(data_nasc), "sexo": sexo, "bolsa": float(limite), "limite_mensal": float(limite), "saldo": float(limite), "email": email, "senha": senha, "categoria": "Base"}
+    try:
+        supabase.table('atletas').insert(dados).execute()
+        return True, "Sucesso"
+    except Exception as e: return (False, f"CPF {cpf} já cadastrado.") if "duplicate key" in str(e) else (False, str(e))
 
 def atualizar_dados_atleta(cpf, nome, email, senha, bolsa_nova):
     dados = {"nome": nome, "email": email, "senha": senha, "bolsa": float(bolsa_nova), "limite_mensal": float(bolsa_nova)}
@@ -90,49 +101,23 @@ def excluir_usuario(tipo, identificador):
         return True, "Usuário excluído!"
     except Exception: return False, "O usuário possui notas vinculadas. Exclua-as primeiro!"
 
-def calcular_tag_3x3(sexo, data_nasc):
-    if not data_nasc or not sexo: return "⚪ SEM_DADOS"
-    h = date.today()
-    n = pd.to_datetime(data_nasc).date()
-    idade = h.year - n.year - ((h.month, h.day) < (n.month, n.day))
-    return "🟪 3X3_FEM" if sexo == "F" else ("🟦 3X3_M_BASE" if idade <= 18 else "🟥 3X3_M_ELITE")
-
-def formatar_saldo_mask(saldo, privilegiado=False):
-    TETO = 500.0
-    return f"R$ {float(saldo):,.2f}" if privilegiado or float(saldo) <= TETO else f"R$ {TETO:,.0f}+"
-
-# --- MÓDULO DE AUDITORIA E EXPORTAÇÃO (DBA) ---
+# --- GESTÃO MASTER E AUDITORIA ---
 def registrar_log_exportacao(admin_nome, destinatario, filtros, qtd):
-    """Grava o registro de disparo de e-mail na tabela de auditoria."""
     dados = {"admin_nome": admin_nome, "destinatario": destinatario, "filtros": filtros, "quantidade_registros": int(qtd)}
+    try: supabase.table('logs_exportacao').insert(dados).execute()
+    except Exception: pass
+
+def obter_senha_admin():
     try:
-        supabase.table('logs_exportacao').insert(dados).execute()
-    except Exception as e: pass # Falha silenciosa para não travar o envio do e-mail
+        res = supabase.table('configuracoes').select('valor').eq('chave', 'senha_admin').execute()
+        if res.data: return res.data[0]['valor']
+    except Exception: pass
+    return "admin"
 
-def enviar_relatorio_email(destinatario, assunto, html_body, admin_nome, filtros, qtd):
-    """Dispara o e-mail via SMTP e aciona o log de auditoria."""
-    usr = os.environ.get("EMAIL_USER")
-    pwd = os.environ.get("EMAIL_PASS")
-    if not usr or not pwd:
-        return False, "Credenciais de e-mail (EMAIL_USER / EMAIL_PASS) não configuradas nas Secrets."
-
-    msg = MIMEMultipart()
-    msg['From'] = usr
-    msg['To'] = destinatario
-    msg['Subject'] = assunto
-    msg.attach(MIMEText(html_body, 'html'))
-
+def atualizar_senha_admin(nova_senha):
     try:
-        s = smtplib.SMTP('smtp.gmail.com', 587)
-        s.starttls()
-        s.login(usr, pwd)
-        s.sendmail(usr, destinatario, msg.as_string())
-        s.quit()
+        supabase.table('configuracoes').update({'valor': nova_senha}).eq('chave', 'senha_admin').execute()
+        return True, "Senha Master atualizada com sucesso!"
+    except Exception as e: return False, str(e)
 
-        # Registra no banco após o envio bem-sucedido
-        registrar_log_exportacao(admin_nome, destinatario, filtros, qtd)
-        return True, "Relatório enviado e log registrado com sucesso!"
-    except Exception as e:
-        return False, f"Erro SMTP: {str(e)}"
-
-# [database.py][Motor de Exportação e Log de Auditoria][2026-02-24 22:50][v2.31][135 linhas]
+# [database.py][Refatoração de Clean Code - Remoção do SMTP][2026-02-25 15:50][v2.50][109 linhas]
