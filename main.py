@@ -3,17 +3,18 @@ from datetime import date
 import time
 import database as db, styles as ui, admin as adm
 
-# Controle de Memória de Sessão
+ui.aplicar_design()
+
 if "tela" not in st.session_state: st.session_state.tela = "lancamento"
 if "res_data" not in st.session_state: st.session_state.res_data = {}
 if "usuario_logado" not in st.session_state: st.session_state.usuario_logado = None
 if "mostra_cadastro" not in st.session_state: st.session_state.mostra_cadastro = False
-if "tema_escolhido" not in st.session_state: st.session_state.tema_escolhido = "preto" # Padrão Elegante
+if "tema_escolhido" not in st.session_state: st.session_state.tema_escolhido = "preto"
 
-# Aplica o design baseado na escolha do Admin
+# Aplica o design dinâmico
 ui.aplicar_design(st.session_state.tema_escolhido)
 
-# --- MOTOR GERADOR DE SENHA DINÂMICA= ---
+# --- MOTOR GERADOR DE SENHA DINÂMICA ---
 def gerar_senha_padrao(email, nome):
     if email and "@" in email:
         prefixo = email.split("@")[0]
@@ -24,9 +25,20 @@ def gerar_senha_padrao(email, nome):
     return base.capitalize() + "123"
 
 st.sidebar.image(ui.LOGO_URL, use_container_width=True)
-
-# RENOMEADO PARA O PADRÃO EXECUTIVO
 menu = st.sidebar.radio("Navegação", ["🏃 Lançamento", "🏛️ Central de Governança"])
+
+# --- NOVO: SELETOR DE TEMAS GLOBAL NA BARRA LATERAL ---
+st.sidebar.divider()
+st.sidebar.caption("🎨 Personalização Visual")
+temas_opcoes = {"🌌 Fundo Imagem": "imagem", "🌑 Fundo Preto": "preto", "📓 Fundo Cinza": "cinza", "⚪ Fundo Branco": "branco"}
+idx_atual = list(temas_opcoes.values()).index(st.session_state.tema_escolhido)
+
+tema_sel = st.sidebar.selectbox("Tema da Interface:", list(temas_opcoes.keys()), index=idx_atual)
+if temas_opcoes[tema_sel] != st.session_state.tema_escolhido:
+    st.session_state.tema_escolhido = temas_opcoes[tema_sel]
+    st.rerun()
+st.sidebar.divider()
+# ------------------------------------------------------
 
 if menu == "🏃 Lançamento":
     # -------------------------------------------------------------
@@ -36,7 +48,6 @@ if menu == "🏃 Lançamento":
         st.title("🔐 Acesso ao Sistema")
         atl_raw, vis_raw, _ = db.carregar_dados_globais()
 
-        # --- FLUXO DE CADASTRO ---
         if st.session_state.mostra_cadastro:
             st.info("Preencha os dados abaixo para criar seu acesso.")
             with st.form("form_cadastro"):
@@ -47,7 +58,6 @@ if menu == "🏃 Lançamento":
                 if st.form_submit_button("Criar Acesso e Entrar"):
                     if nm and em:
                         senha_nova = gerar_senha_padrao(em, nm)
-                        # Assumindo que upsert_visitante está no seu db (ou ajuste conforme usava antes)
                         v_id = db.upsert_visitante({"nome": nm, "email": em, "whatsapp": wh, "senha": senha_nova})
                         st.session_state.usuario_logado = {"tipo": "visitante", "id": v_id, "nome": nm}
                         st.success(f"Cadastro realizado! Sua senha automática é: {senha_nova}")
@@ -61,7 +71,6 @@ if menu == "🏃 Lançamento":
                 st.session_state.mostra_cadastro = False
                 st.rerun()
 
-        # --- FLUXO DE LOGIN NORMAL ---
         else:
             nomes_combinados = [f"🏃 {a['nome']}" for a in atl_raw] + [f"👤 {v['nome']} (Visitante)" for v in vis_raw]
             nomes_combinados.sort(key=lambda x: x.replace("🏃 ", "").replace("👤 ", "").lower())
@@ -168,9 +177,8 @@ if menu == "🏃 Lançamento":
                     st.session_state.tela = "resumo"
                     st.rerun()
 
-# RENOMEADO PARA O PADRÃO EXECUTIVO
 elif menu == "🏛️ Central de Governança":
     st.title("🏛️ Central de Governança")
-    adm.exibir_sala_de_guerra() # O nome da função interna continua igual para não quebrar integrações
+    adm.exibir_sala_de_guerra()
 
-# [main.py][Upgrade de Nomenclatura Corporativa][2026-02-24 23:25][v25.0][168 linhas]
+# [main.py][Integração Global do Seletor de Temas][2026-02-25 06:23][v26.0][180 linhas]

@@ -77,21 +77,6 @@ def exibir_sala_de_guerra():
 
         # --- ABA 2: GESTÃO & BI ---
         with tab_usr:
-
-            # --- NOVO: SELETOR DE TEMAS ---
-            with st.expander("🎨 Personalização Visual (Temas)", expanded=False):
-                st.write("**Escolha o padrão de fundo e contraste do sistema:**")
-                c_t1, c_t2, c_t3, c_t4 = st.columns(4)
-                if c_t1.button("🌌 Fundo Imagem", use_container_width=True):
-                    st.session_state.tema_escolhido = "imagem"; st.rerun()
-                if c_t2.button("🌑 Fundo Preto", use_container_width=True):
-                    st.session_state.tema_escolhido = "preto"; st.rerun()
-                if c_t3.button("📓 Fundo Cinza", use_container_width=True):
-                    st.session_state.tema_escolhido = "cinza"; st.rerun()
-                if c_t4.button("⚪ Fundo Branco", use_container_width=True):
-                    st.session_state.tema_escolhido = "branco"; st.rerun()
-            # --------------------------------
-
             grafico = f_adm.gerar_grafico_consumo(atl_data)
             if grafico: st.plotly_chart(grafico, use_container_width=True)
             st.divider()
@@ -175,4 +160,4 @@ def exibir_sala_de_guerra():
 
     else: st.info("Restrito.")
 
-# [admin.py][Seletor de Temas Integrado ao Gestor][2026-02-25 06:15][v6.10][193 linhas]
+# [admin.py][Limpeza de UI: Transferência do Seletor Global][2026-02-25 06:23][v6.11][178 linhas]
