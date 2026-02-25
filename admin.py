@@ -1,144 +1,107 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import plotly.express as px
 import database as db
+import funcoes_admin as f_adm
 import time
 
 def exibir_sala_de_guerra():
     if st.sidebar.text_input("Senha Admin", type="password") == "admin":
-        # 1. Carregamento de dados (Forçamos a atualização se houver mudança)
         atl_data, vis_data, lan_data = db.carregar_dados_globais()
-
         tab_fin, tab_usr = st.tabs(["📊 Auditoria Financeira", "👥 Gestão de Usuários"])
 
-        # ==========================================================
-        # ABA 1: AUDITORIA COM SELEÇÃO POR CLIQUE
-        # ==========================================================
+        # --- ABA 1: AUDITORIA ---
         with tab_fin:
-            if not lan_data:
-                st.info("Nenhum lançamento encontrado no sistema.")
+            c1, c2, c3 = st.columns(3)
+            mes = c1.selectbox("Mês:", ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"], index=date.today().month-1)
+            ano = c2.selectbox("Ano:", [2024, 2025, 2026], index=2)
+            st_f = c3.selectbox("Status:", ["Todas", "⚠️ Pendente", "✅ Aprovada", "❌ Reprovada"])
+
+            m_idx = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].index(mes) + 1
+            df_f = f_adm.preparar_auditoria(lan_data, m_idx, ano, st_f)
+
+            if df_f.empty: st.warning("Nada para auditar.")
             else:
-                df_lan = pd.DataFrame(lan_data)
-                df_lan['dt'] = pd.to_datetime(df_lan['created_at'])
-                df_lan['status'] = df_lan['status'].replace({"⏳ Pendente": "❓ Pendente", "📸 Reenviar Foto": "❌ Reprovada"}).fillna("❓ Pendente")
+                id_sel = None
+                ev = st.dataframe(df_f[['Status_UI', 'Atleta (Bolsa)', 'Lançado por', 'valor', 'data_nota', 'foto_url']], 
+                                  column_config={"foto_url": st.column_config.ImageColumn("NF"), "valor": st.column_config.NumberColumn("R$", format="%.2f")},
+                                  use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+                if ev.selection.rows: id_sel = df_f.iloc[ev.selection.rows[0]]['id']
 
-                st.subheader("🔍 Filtros e Visão Geral")
-                c1, c2, c3 = st.columns(3)
-                mes_ref = c1.selectbox("Mês:", ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"], index=date.today().month-1)
-                ano_ref = c2.selectbox("Ano:", [2024, 2025, 2026], index=2)
-                status_f = c3.selectbox("Status Geral:", ["Todas as Notas", "❓ Pendente", "✅ Aprovada", "❌ Reprovada"])
+                st.divider()
+                with st.expander("🔍 Auditoria Detalhada", expanded=(id_sel is not None)):
+                    if id_sel:
+                        nota = df_f[df_f['id'] == id_sel].iloc[0]
+                        f_adm.exibir_origem_com_saldo(nota['Atleta (Bolsa)'], nota['Lançado por'], nota['Saldo_Atleta'])
 
-                m_num = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].index(mes_ref) + 1
-                df_f = df_lan[(df_lan['dt'].dt.month == m_num) & (df_lan['dt'].dt.year == ano_ref)]
-                if status_f != "Todas as Notas": df_f = df_f[df_f['status'] == status_f]
+                        if nota['orfao']:
+                            st.warning("🚨 REGISTRO SEM BENEFICIÁRIO: Selecione um atleta para vincular:")
+                            atl_opcoes = {f"{a['nome']} (Saldo: R$ {a['saldo']:.2f})": a['cpf'] for a in atl_data}
+                            escolha = st.selectbox("Vincular a:", ["Selecione..."] + list(atl_opcoes.keys()))
+                            if st.button("🔗 Confirmar Vínculo e Abater Saldo", use_container_width=True):
+                                if escolha != "Selecione...":
+                                    ok, msg = db.vincular_atleta_a_nota(nota['id'], atl_opcoes[escolha], nota['valor'])
+                                    if ok: st.success(msg); time.sleep(1.2); st.rerun()
+                                    else: st.error(msg)
 
-                if df_f.empty:
-                    st.warning("Nenhuma nota encontrada.")
-                else:
-                    st.divider()
-                    st.subheader("📋 Tabela de Auditoria")
-                    st.caption("💡 **Dica Prime:** Clique em uma linha para abrir a auditoria detalhada abaixo.")
+                        c_img, c_btn = st.columns([1, 1])
+                        c_img.image(nota['foto_url'], use_container_width=True)
+                        with c_btn:
+                            st.write(f"**Valor NF:** R$ {nota['valor']:.2f}")
+                            if st.button("✅ Aprovar", use_container_width=True):
+                                db.alterar_status_nota(nota['id'], nota['atleta_cpf'], nota['valor'], nota['Status_UI'], "✅ Aprovada"); st.rerun()
+                            if st.button("❌ Reprovar", use_container_width=True, type="primary"):
+                                db.alterar_status_nota(nota['id'], nota['atleta_cpf'], nota['valor'], nota['Status_UI'], "❌ Reprovada"); st.rerun()
 
-                    df_view = df_f.copy()
-                    df_view['ID'] = df_view['id'].astype(str).str[:6]
-                    df_view['Quem'] = df_view.apply(lambda r: r.get('atletas', {}).get('nome', 'Sem Nome') if pd.notnull(r.get('atletas')) else f"Vis: {r.get('visitantes', {}).get('nome', 'Sem Nome')}", axis=1)
-
-                    # --- SELEÇÃO INTERATIVA NA AUDITORIA ---
-                    id_selecionado_clique = None
-                    try:
-                        ev_aud = st.dataframe(
-                            df_view[['ID', 'status', 'Quem', 'valor', 'data_nota', 'foto_url']],
-                            use_container_width=True, hide_index=True,
-                            on_select="rerun", selection_mode="single-row",
-                            column_config={"foto_url": st.column_config.ImageColumn("NF (Zoom)")}
-                        )
-                        if ev_aud.selection.rows:
-                            id_selecionado_clique = df_view.iloc[ev_aud.selection.rows[0]]['ID']
-                    except:
-                        st.dataframe(df_view[['ID', 'status', 'Quem', 'valor', 'data_nota', 'foto_url']], use_container_width=True, hide_index=True)
-
-                    st.divider()
-                    # --- MESA DE OPERAÇÃO AUTOMATIZADA ---
-                    with st.expander("🔍 Mesa de Operação: Validar Nota", expanded=(id_selecionado_clique is not None)):
-                        lista_opcoes = ["Selecione..."] + df_view.apply(lambda r: f"{r['ID']} | {r['status']} | {r['Quem']} | R$ {r['valor']}", axis=1).tolist()
-
-                        # Se clicou na tabela, já pré-seleciona no combo
-                        idx_combo = 0
-                        if id_selecionado_clique:
-                            for i, opt in enumerate(lista_opcoes):
-                                if opt.startswith(id_selecionado_clique):
-                                    idx_combo = i; break
-
-                        nota_sel = st.selectbox("Nota em Auditoria:", lista_opcoes, index=idx_combo)
-
-                        if nota_sel != "Selecione...":
-                            id_final = nota_sel.split(" | ")[0]
-                            nota_c = df_f[df_f['id'].astype(str).str.startswith(id_final)].iloc[0]
-
-                            d_atl = nota_c.get('atletas'); d_vis = nota_c.get('visitantes')
-                            n_atl = d_atl.get('nome') if pd.notnull(d_atl) else d_vis.get('nome', 'Desconhecido')
-                            e_atl = d_atl.get('email') if pd.notnull(d_atl) else d_vis.get('email', '')
-
-                            c_img, c_btns = st.columns([1, 1])
-                            with c_img: st.image(nota_c['foto_url'], use_container_width=True)
-                            with c_btns:
-                                st.write(f"**Status:** {nota_c['status']}")
-                                if st.button("✅ Aprovar Nota", use_container_width=True):
-                                    db.alterar_status_nota(nota_c['id'], nota_c['atleta_cpf'], nota_c['valor'], nota_c['status'], "✅ Aprovada", e_atl, n_atl, nota_c['data_nota'], n_atl, nota_c['foto_url'])
-                                    st.success("Aprovado!"); time.sleep(1); st.rerun()
-                                if st.button("❌ Reprovar", use_container_width=True, type="primary"):
-                                    db.alterar_status_nota(nota_c['id'], nota_c['atleta_cpf'], nota_c['valor'], nota_c['status'], "❌ Reprovada", e_atl, n_atl, nota_c['data_nota'], n_atl, nota_c['foto_url'])
-                                    st.error("Reprovado!"); time.sleep(1); st.rerun()
-
-        # ==========================================================
-        # ABA 2: GESTÃO E CADASTRO (FIX CACHE)
-        # ==========================================================
+        # --- ABA 2: GESTÃO & BI ---
         with tab_usr:
+            # Gráfico de BI
+            grafico = f_adm.gerar_grafico_consumo(atl_data)
+            if grafico: st.plotly_chart(grafico, use_container_width=True)
+            st.divider()
+
             if "lote_key" not in st.session_state: st.session_state.lote_key = 0
-
-            with st.expander("⚡ Cadastro Rápido (Lote)", expanded=False):
-                df_mod = pd.DataFrame(columns=["Nome", "CPF", "Nascimento", "Sexo", "Bolsa", "Email", "Senha"])
-                df_ed = st.data_editor(df_mod, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"ed_{st.session_state.lote_key}",
-                    column_config={"Sexo": st.column_config.SelectboxColumn("Sexo", options=["M", "F"], required=True), "Bolsa": st.column_config.NumberColumn("Bolsa (R$)", min_value=0.0)})
-
-                if st.button("🚀 Salvar Lote", type="primary"):
-                    if not df_ed.empty:
-                        for i, r in df_ed.iterrows():
-                            nm = str(r.get('Nome','')).strip()
-                            cp = str(r.get('CPF','')).strip()
-                            if nm and cp and nm.lower() != 'nan':
-                                cp_l = ''.join(filter(str.isdigit, cp))
-                                db.cadastrar_novo_atleta(nm, cp_l, r.get('Nascimento') or date.today(), r.get('Sexo') or 'M', float(r.get('Bolsa') or 0.0), str(r.get('Email') or f"{cp_l}@notafacil.com"), str(r.get('Senha') or "mudar123"))
-
-                        st.success("Salvo! Atualizando...")
-                        st.session_state.lote_key += 1
-                        time.sleep(1); st.rerun()
+            st.subheader("👥 Lista de Acessos")
+            u_l = [{"Nome": a['nome'], "Tipo": "🏃 Atleta", "Saldo": a['saldo'], "Email": a.get('email', '-')} for a in atl_data] + [{"Nome": v['nome'], "Tipo": "👤 Visitante", "Saldo": "-", "Email": v.get('email', '-')} for v in vis_data]
+            st.dataframe(pd.DataFrame(u_l).sort_values("Nome"), use_container_width=True, hide_index=True)
 
             st.divider()
-            st.subheader("👥 Lista de Acessos")
-            u_l = [{"Nome": a['nome'], "Tipo": "Atleta", "E-mail": a.get('email', '-'), "Ref": a} for a in atl_data] + [{"Nome": v['nome'], "Tipo": "Visitante", "E-mail": v.get('email', '-'), "Ref": v} for v in vis_data]
-            df_u = pd.DataFrame(u_l).sort_values("Nome").reset_index(drop=True)
+            with st.expander("⚡ Cadastro Rápido de Atletas", expanded=False):
+                # O calendário nativo agora força o formato e blinda datas vazias
+                df_mod = pd.DataFrame(columns=["Nome","CPF","Nascimento","Sexo","Bolsa","Email","Senha"])
+                df_ed = st.data_editor(df_mod, num_rows="dynamic", use_container_width=True, key=f"ed_{st.session_state.lote_key}",
+                                      column_config={
+                                          "Sexo": st.column_config.SelectboxColumn("Sexo", options=["M", "F"], required=True),
+                                          "Nascimento": st.column_config.DateColumn("Nascimento", format="DD/MM/YYYY"),
+                                          "Senha": st.column_config.TextColumn("Senha Inicial")
+                                      })
+                if st.button("🚀 Salvar Novos Registros", type="primary"):
+                    if not df_ed.empty:
+                        sucessos, erros = 0, []
+                        for _, r in df_ed.iterrows():
+                            nm, cp = r.get('Nome'), r.get('CPF')
+                            if pd.notnull(nm) and pd.notnull(cp) and str(nm).strip() != '':
+                                cpf_str = ''.join(filter(str.isdigit, str(cp)))
 
-            n_sel_t = "Selecione..."
-            try:
-                ev_u = st.dataframe(df_u[['Nome', 'Tipo', 'E-mail']], use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
-                if ev_u.selection.rows: n_sel_t = df_u.iloc[ev_u.selection.rows[0]]['Nome']
-            except: st.dataframe(df_u[['Nome', 'Tipo', 'E-mail']], use_container_width=True, hide_index=True)
+                                # Tratamento blindado para calendário vazio
+                                nasc = r.get('Nascimento')
+                                if pd.isnull(nasc): nasc_str = str(date.today())
+                                else: nasc_str = nasc.strftime('%Y-%m-%d') if hasattr(nasc, 'strftime') else str(nasc)[:10]
 
-            with st.expander("🛠️ Editar Acesso", expanded=(n_sel_t != "Selecione...")):
-                ops = ["Selecione..."] + df_u['Nome'].tolist()
-                u_s = st.selectbox("Usuário:", ops, index=ops.index(n_sel_t) if n_sel_t in ops else 0)
-                if u_s != "Selecione...":
-                    obj = next(u for u in u_l if u['Nome'] == u_s)
-                    t_r = "atleta" if obj['Tipo'] == "Atleta" else "visitante"
-                    c_id = obj['Ref'].get('cpf') if t_r == "atleta" else obj['Ref'].get('id')
-                    n_em = st.text_input("E-mail:", value=obj['Ref'].get('email', ''))
-                    n_se = st.text_input("Nova Senha:", placeholder="Opcional")
-                    if st.button("💾 Salvar Alterações", type="primary"):
-                        db.atualizar_usuario(t_r, c_id, n_em, n_se if n_se else None)
-                        st.success("OK!"); time.sleep(1); st.rerun()
+                                b_val = float(r.get('Bolsa')) if pd.notnull(r.get('Bolsa')) else 0.0
+                                e_val = str(r.get('Email')) if pd.notnull(r.get('Email')) else f"{cpf_str}@notafacil.com"
+                                s_val = str(r.get('Senha')) if pd.notnull(r.get('Senha')) else "mudar123"
+                                sex_val = str(r.get('Sexo')) if pd.notnull(r.get('Sexo')) else "M"
 
-    else: st.info("Acesso Administrativo Restrito.")
+                                ok, msg = db.cadastrar_novo_atleta(nm, cpf_str, nasc_str, sex_val, b_val, e_val, s_val)
+                                if ok: sucessos += 1
+                                else: erros.append(f"{nm}: {msg}")
 
-# [admin.py][Auditoria e Gestão Sincronizadas por Clique][2026-02-24 19:40][v4.2][135 linhas]
+                        if sucessos > 0:
+                            st.success(f"✅ {sucessos} atleta(s) cadastrados com sucesso!")
+                            st.session_state.lote_key += 1
+                            time.sleep(1.2); st.rerun()
+                        for err in erros: st.error(err)
+    else: st.info("Restrito.")
+
+# [admin.py][Gráfico BI, Máscara de Calendário e Blindagem de Insert][2026-02-24 21:35][v6.4][135 linhas]
