@@ -14,13 +14,12 @@ def get_base64_of_bin_file(bin_file):
         return ""
 
 def aplicar_design(tema="branco"):
-    """Motor Dinâmico de Temas com Dupla Camada de Segurança para Imagens"""
+    """Motor Dinâmico de Temas com Acessibilidade e Contraste Corrigidos"""
 
     # 1. DEFINIÇÃO DE FUNDO E FONTES COM BASE NO TEMA
     if tema == "imagem":
-        # TENTATIVA 1: Arquivo Local (Mais rápido e seguro)
+        # TENTATIVA 1: Arquivo Local
         img_base64 = get_base64_of_bin_file("background-nf-prime-mob.png")
-
         if img_base64:
             fundo_css = f"""
             [data-testid="stAppViewContainer"] {{
@@ -34,7 +33,7 @@ def aplicar_design(tema="branco"):
             }}
             """
         else:
-            # TENTATIVA 2: Fallback na Web (Busca no seu GitHub se não achar localmente)
+            # TENTATIVA 2: Fallback Web
             bg_url = "https://raw.githubusercontent.com/marcosbarbosaam/Streamlit-Core/main/background-nf-prime-mob.png"
             fundo_css = f"""
             [data-testid="stAppViewContainer"] {{
@@ -71,7 +70,7 @@ def aplicar_design(tema="branco"):
         }
         """
 
-    # 2. INJEÇÃO DO CSS BASE (Agressivo para Botões e Inputs)
+    # 2. INJEÇÃO DO CSS BASE (Agressivo para Botões, Inputs e Expanders)
     css_base = f"""
     <style>
     {fundo_css}
@@ -82,7 +81,23 @@ def aplicar_design(tema="branco"):
         color: #FFFFFF !important; text-shadow: none !important; 
     }}
 
-    /* Proteção dos Campos de Formulário (Brancos com Letra Preta) */
+    /* CORREÇÃO UX 1: Ajuste de Contraste para o Expander (Sanfona) */
+    div[data-testid="stExpander"] details summary {{
+        background-color: #262730 !important;
+        border: 1px solid #444 !important;
+        border-radius: 6px;
+        padding: 8px !important;
+    }}
+    div[data-testid="stExpander"] details summary:hover {{
+        background-color: #383945 !important;
+    }}
+    div[data-testid="stExpander"] details summary p,
+    div[data-testid="stExpander"] details summary span,
+    div[data-testid="stExpander"] details summary svg {{
+        color: #FFFFFF !important;
+    }}
+
+    /* CORREÇÃO UX 2: Proteção dos Campos de Formulário (Brancos com Letra Preta) */
     .stTextInput input, .stNumberInput input, div[data-baseweb="select"] > div {{ 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
@@ -90,26 +105,30 @@ def aplicar_design(tema="branco"):
         text-shadow: none !important; 
     }}
 
-    /* CSS BRUTAL DE BOTÕES: Força a cor de fundo */
+    /* CORREÇÃO UX 3: Força cor de fundo Azul em TODOS os Botões de Ação */
     .stButton > button, 
-    div[data-testid="stFormSubmitButton"] button {{
+    .stDownloadButton > button,
+    div[data-testid="stFormSubmitButton"] button,
+    div[data-testid="stFileUploader"] button {{
         background-color: #0056B3 !important;
         border: 1px solid #004494 !important;
     }}
 
-    /* CORREÇÃO DE ACESSIBILIDADE: Força o texto BRANCO dentro de qualquer elemento do botão */
-    .stButton > button, 
+    /* CORREÇÃO UX 4: Força texto Branco em todos os elementos internos dos botões */
     .stButton > button *,
-    div[data-testid="stFormSubmitButton"] button,
-    div[data-testid="stFormSubmitButton"] button * {{
+    .stDownloadButton > button *,
+    div[data-testid="stFormSubmitButton"] button *,
+    div[data-testid="stFileUploader"] button * {{
         color: #FFFFFF !important;
         font-weight: bold !important;
         text-shadow: none !important;
     }}
 
-    /* Efeito Hover (Interação do Mouse) */
+    /* Efeito Hover (Interação do Mouse nos Botões) */
     .stButton > button:hover, 
-    div[data-testid="stFormSubmitButton"] button:hover {{
+    .stDownloadButton > button:hover,
+    div[data-testid="stFormSubmitButton"] button:hover,
+    div[data-testid="stFileUploader"] button:hover {{
         background-color: #004494 !important;
         border: 1px solid #002a5c !important;
     }}
@@ -117,4 +136,4 @@ def aplicar_design(tema="branco"):
     """
     st.markdown(css_base, unsafe_allow_html=True)
 
-# [styles.py][Correção Base64 Dupla Camada e Acessibilidade][2026-02-25 18:20][v2.6][113 linhas]
+# [styles.py][Correção de Acessibilidade: Expanders e Botões][2026-02-26 08:15][v2.7][136 linhas]
