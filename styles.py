@@ -3,8 +3,9 @@ import db_config as db
 
 def aplicar_estilos_globais(tema="🌑 Escuro"):
     """
-    Motor Visual v9.5: Controle de Raiz (Root Override).
-    Blinda o HTML e o BODY contra a interferência do modo noturno nativo.
+    Motor Visual v10.5: Root Control Refinado.
+    Garante a mudança de fundo na raiz do sistema, mas preserva a elegância 
+    nativa das tabelas, sombras e componentes de alerta do Streamlit.
     """
 
     # 1. CSS BASE: Oculta headers nativos e configura os botões
@@ -16,7 +17,7 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
     .stMarkdown div pre { display: none !important; }
     .stMarkdown code { display: none !important; }
 
-    /* 🎛️ SUPER BOTÕES PRIME */
+    /* 🎛️ SUPER BOTÕES PRIME (Efeito 3D Preservado) */
     .stButton > button { 
         border-radius: 8px !important; 
         transition: all 0.3s ease !important;
@@ -40,8 +41,8 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
         css_tema = """
         <style>
         /* Injeta a cor no HTML e BODY para anular o navegador */
-        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #0e1117 !important; }
-        h1, h2, h3, h4, label, p, span, .stMarkdown { color: #fafafa !important; }
+        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #0e1117 !important; color: #fafafa !important; }
+        h1, h2, h3, .stMarkdown { color: #fafafa !important; }
         section[data-testid="stSidebar"], [data-testid="stSidebarContent"] { background-color: #1a1c24 !important; }
 
         button[kind="secondary"] { background-color: #2b2b36 !important; color: #ffffff !important; border: 1px solid #444 !important; }
@@ -52,8 +53,8 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
     elif tema == "☀️ Claro":
         css_tema = """
         <style>
-        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #ffffff !important; }
-        h1, h2, h3, h4, label, p, span, .stMarkdown { color: #000000 !important; font-weight: 600 !important; }
+        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #ffffff !important; color: #000000 !important; }
+        h1, h2, h3, .stMarkdown { color: #000000 !important; font-weight: 600 !important; }
         section[data-testid="stSidebar"], [data-testid="stSidebarContent"] { background-color: #f8f9fa !important; }
 
         button[kind="secondary"] { background-color: #f1f3f5 !important; color: #333 !important; border: 1px solid #ccc !important; }
@@ -64,9 +65,8 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
     elif tema == "🏢 Cinza (Prime)":
         css_tema = """
         <style>
-        /* REPARO MARVEL DEFINITIVO: Oculta o preto nativo aplicando o cinza direto na raiz */
-        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #262730 !important; } 
-        h1, h2, h3, h4, label, p, span, .stMarkdown { color: #ffffff !important; }
+        html, body, .stApp, [data-testid="stAppViewContainer"] { background-color: #262730 !important; color: #ffffff !important; } 
+        h1, h2, h3, .stMarkdown { color: #ffffff !important; }
         section[data-testid="stSidebar"], [data-testid="stSidebarContent"] { background-color: #111111 !important; }
 
         button[kind="secondary"] { background-color: #3e404f !important; color: white !important; border: 1px solid #555 !important; }
@@ -86,7 +86,8 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
                 background-size: cover !important; 
                 background-attachment: fixed !important;
             }}
-            h1, h2, h3, h4, label, p, span, .stMarkdown {{ color: #000000 !important; font-weight: 800 !important; }}
+            .stApp {{ color: #000000 !important; }}
+            h1, h2, h3, .stMarkdown {{ color: #000000 !important; font-weight: 800 !important; }}
 
             button[kind="secondary"] {{ background-color: #ffffff !important; color: #333 !important; border: 2px solid #333 !important; }}
             button[kind="primary"] {{ background-color: #ffc107 !important; color: #000 !important; border: 2px solid #d39e00 !important; }}
@@ -98,4 +99,4 @@ def aplicar_estilos_globais(tema="🌑 Escuro"):
     # O Mestre da Injeção
     st.markdown(css_base + css_tema, unsafe_allow_html=True)
 
-# [styles.py][Root Control Definitivo v9.5][2026-02-26]
+# [styles.py][Root Control + Elegância Nativa v10.5][2026-02-26]
