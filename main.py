@@ -1,75 +1,98 @@
-import os
 import streamlit as st
-from PIL import Image
-
-# Importação dos nossos módulos
-import styles as ui
-import database as db
-import admin as adm
+import database as db # Mantemos o alias para compatibilidade com outros arquivos
+import styles
 import portal_lancamento as portal
+import admin
 
-# -------------------------------------------------------------
-# 1. CONTROLE DE MEMÓRIA E SESSÃO (STATE MANAGEMENT)
-# -------------------------------------------------------------
-if "tela" not in st.session_state: st.session_state.tela = "lancamento"
-if "res_data" not in st.session_state: st.session_state.res_data = {}
-if "usuario_logado" not in st.session_state: st.session_state.usuario_logado = None
-if "mostra_cadastro" not in st.session_state: st.session_state.mostra_cadastro = False
-if "tema_escolhido" not in st.session_state: st.session_state.tema_escolhido = "branco"
+# ==========================================
+# 1. SETUP INICIAL DE PLATAFORMA
+# ==========================================
+st.set_page_config(
+    page_title="NotaFácil Prime", 
+    page_icon="🏀", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Aplica o design dinâmico assim que a página carrega
-ui.aplicar_design(st.session_state.tema_escolhido)
+# ==========================================
+# 2. INICIALIZAÇÃO DE SESSÕES (CACHE BI)
+# ==========================================
+# Garante que as variáveis de controle existam na memória do navegador
+if 'usuario_logado' not in st.session_state:
+    st.session_state['usuario_logado'] = None
 
-# -------------------------------------------------------------
-# 2. CONSTRUÇÃO DA BARRA LATERAL E LOGOMARCA ANTI-CRASH
-# -------------------------------------------------------------
-try:
-    # ATUALIZAÇÃO: Rede de captura robusta para todas as extensões!
-    if os.path.exists("logo-notaFacil.png"):
-        logo_img = Image.open("logo-notaFacil.png")
-        st.sidebar.image(logo_img, use_container_width=True)
-    elif os.path.exists("logo-notaFacil.jpg"):
-        logo_img = Image.open("logo-notaFacil.jpg")
-        st.sidebar.image(logo_img, use_container_width=True)
-    elif os.path.exists("logo.png"):
-        logo_img = Image.open("logo.png")
-        st.sidebar.image(logo_img, use_container_width=True)
-    elif os.path.exists("Logo.png"):
-        logo_img = Image.open("Logo.png")
-        st.sidebar.image(logo_img, use_container_width=True)
-    else:
-        st.sidebar.markdown("### 🏀 NotaFácil Prime")
-except Exception:
-    st.sidebar.markdown("### 🏀 NotaFácil Prime")
+if 'mostra_cadastro' not in st.session_state:
+    st.session_state['mostra_cadastro'] = False
 
-# Menu Principal desobstruído no topo
-menu = st.sidebar.radio("Navegação", ["🏃 Lançamento", "🏛️ Central de Governança"])
+# Recupera o tema visual preferido (Inicia no Escuro por padrão)
+if 'tema_visual' not in st.session_state:
+    st.session_state['tema_visual'] = "🌑 Escuro"
 
-st.sidebar.divider()
+# ==========================================
+# 3. APLICAÇÃO DO MOTOR VISUAL BLINDADO
+# ==========================================
+# Chama o styles.py que agora processa o fundo vindo do banco de dados
+styles.aplicar_estilos_globais(st.session_state['tema_visual'])
 
-# --- ATUALIZAÇÃO UX: Ocultado em um Expander na base da barra lateral ---
-with st.sidebar.expander("🎨 Personalização Visual", expanded=False):
-    temas_opcoes = {
-        "⚪ Fundo Branco": "branco", 
-        "🌌 Fundo Imagem": "imagem", 
-        "🌑 Fundo Preto": "preto", 
-        "📓 Fundo Cinza": "cinza"
-    }
-    idx_atual = list(temas_opcoes.values()).index(st.session_state.tema_escolhido)
+# ==========================================
+# 4. MENU LATERAL DE GOVERNANÇA
+# ==========================================
+with st.sidebar:
+    st.image("logo-notaFacil.png", use_container_width=True)
+    st.divider()
 
-    tema_sel = st.selectbox("Tema da Interface:", list(temas_opcoes.keys()), index=idx_atual)
-    if temas_opcoes[tema_sel] != st.session_state.tema_escolhido:
-        st.session_state.tema_escolhido = temas_opcoes[tema_sel]
+    st.caption("Navegação Estratégica")
+    navegacao = st.radio(
+        "Selecione o Módulo", 
+        ["🏃 Lançamento", "🏛️ Central de Governança"],
+        label_visibility="collapsed"
+    )
+
+    st.divider()
+
+    # Seletor de Temas (Integrado com db_config para ler o fundo da quadra)
+    st.caption("🎨 Personalização Visual")
+    opcoes_temas = ["🌑 Escuro", "☀️ Claro", "🏢 Cinza (Prime)", "🏀 Fundo Imagem"]
+
+    try: 
+        idx_atual = opcoes_temas.index(st.session_state['tema_visual'])
+    except: 
+        idx_atual = 0
+
+    tema_selecionado = st.selectbox(
+        "Escolha o Tema", 
+        opcoes_temas,
+        index=idx_atual,
+        label_visibility="collapsed"
+    )
+
+    # Lógica de atualização imediata de UI
+    if tema_selecionado != st.session_state['tema_visual']:
+        st.session_state['tema_visual'] = tema_selecionado
         st.rerun()
 
-# -------------------------------------------------------------
-# 3. ROTEADOR DE MÓDULOS (MVC Pattern)
-# -------------------------------------------------------------
-if menu == "🏃 Lançamento":
+# ==========================================
+# 5. ROTEADOR DE MÓDULOS (CORE)
+# ==========================================
+if navegacao == "🏃 Lançamento":
+    # Módulo de entrada de dados para atletas e visitantes
     portal.renderizar_portal()
 
-elif menu == "🏛️ Central de Governança":
-    st.title("🏛️ Central de Governança")
-    adm.exibir_sala_de_guerra()
+elif navegacao == "🏛️ Central de Governança":
+    # Módulo de Auditoria, BI e Gestão de Equipe
+    admin.exibir_sala_de_guerra()
 
-# [main.py][Injeção da Logomarca PNG com Múltiplas Capturas][2026-02-25 18:45][v27.3][76 linhas]
+# ==========================================
+# 6. RODAPÉ DE VERSÃO (BI AUDIT)
+# ==========================================
+# Recupera as informações de copyright do banco modularizado
+cfg_rodape = db.obter_config_rodape()
+st.sidebar.markdown(f"""
+---
+<div style='text-align: center; color: #777; font-size: 10px;'>
+    {cfg_rodape['copyright']} | {cfg_rodape['versao']}<br>
+    Governança Inteligente
+</div>
+""", unsafe_allow_html=True)
+
+# [main.py][Unificador de Módulos Database][2026-02-26 16:45][v1.5]

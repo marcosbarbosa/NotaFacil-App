@@ -1,139 +1,85 @@
 import streamlit as st
-import base64
-import os
+import db_config as db 
 
-def get_base64_of_bin_file(bin_file):
-    """Lê a imagem local de fundo e converte para o CSS em Base64"""
-    try:
-        if os.path.exists(bin_file):
-            with open(bin_file, 'rb') as f:
-                data = f.read()
-            return base64.b64encode(data).decode()
-        return ""
-    except Exception:
-        return ""
+def aplicar_estilos_globais(tema="🌑 Escuro"):
+    """
+    Motor Visual v5.6: Blindagem Final Marvel Prime.
+    Resolve vazamento de CSS e garante contraste absoluto em BI.
+    """
 
-def aplicar_design(tema="branco"):
-    """Motor Dinâmico de Temas com Acessibilidade e Contraste Corrigidos"""
-
-    # 1. DEFINIÇÃO DE FUNDO E FONTES COM BASE NO TEMA
-    if tema == "imagem":
-        # TENTATIVA 1: Arquivo Local
-        img_base64 = get_base64_of_bin_file("background-nf-prime-mob.png")
-        if img_base64:
-            fundo_css = f"""
-            [data-testid="stAppViewContainer"] {{
-                background-image: url("data:image/png;base64,{img_base64}");
-                background-size: cover; 
-                background-position: center;
-                background-attachment: fixed;
-            }}
-            [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 {{ 
-                color: #FFFFFF !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important; 
-            }}
-            """
-        else:
-            # TENTATIVA 2: Fallback Web
-            bg_url = "https://raw.githubusercontent.com/marcosbarbosaam/Streamlit-Core/main/background-nf-prime-mob.png"
-            fundo_css = f"""
-            [data-testid="stAppViewContainer"] {{
-                background-image: url("{bg_url}");
-                background-size: cover; 
-                background-position: center;
-                background-attachment: fixed;
-            }}
-            [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 {{ 
-                color: #FFFFFF !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important; 
-            }}
-            """
-
-    elif tema == "preto":
-        fundo_css = """
-        [data-testid="stAppViewContainer"] { background-color: #0E1117; }
-        [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 { 
-            color: #FFFFFF !important; text-shadow: none !important; 
-        }
-        """
-    elif tema == "cinza":
-        fundo_css = """
-        [data-testid="stAppViewContainer"] { background-color: #262730; }
-        [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 { 
-            color: #FAFAFA !important; text-shadow: none !important; 
-        }
-        """
-    elif tema == "branco":
-        fundo_css = """
-        [data-testid="stAppViewContainer"] { background-color: #F4F6F8; }
-
-        [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2, [data-testid="stAppViewContainer"] h3 { 
-            color: #1A1A1A !important; text-shadow: none !important; 
-        }
-        """
-
-    # 2. INJEÇÃO DO CSS BASE (Agressivo para Botões, Inputs e Expanders)
-    css_base = f"""
+    # 1. CSS BASE: Blindagem contra elementos nativos e vazamentos
+    css_base = """
     <style>
-    {fundo_css}
+    #MainMenu, footer, header { visibility: hidden; }
+    .block-container { padding-top: 1.5rem !important; }
 
-    /* Proteção da Barra Lateral (Sempre Escura) */
-    [data-testid="stSidebar"] {{ background-color: #1A1A1D !important; }}
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label, [data-testid="stSidebar"] h1 {{ 
-        color: #FFFFFF !important; text-shadow: none !important; 
-    }}
+    /* BLOQUEIO DE VAZAMENTO: Garante que o CSS não seja interpretado como texto Markdown */
+    .stMarkdown div pre { background-color: transparent !important; border: none !important; display: none !important; }
+    .stMarkdown code { display: none !important; }
 
-    /* CORREÇÃO UX 1: Ajuste de Contraste para o Expander (Sanfona) */
-    div[data-testid="stExpander"] details summary {{
-        background-color: #262730 !important;
-        border: 1px solid #444 !important;
-        border-radius: 6px;
-        padding: 8px !important;
-    }}
-    div[data-testid="stExpander"] details summary:hover {{
-        background-color: #383945 !important;
-    }}
-    div[data-testid="stExpander"] details summary p,
-    div[data-testid="stExpander"] details summary span,
-    div[data-testid="stExpander"] details summary svg {{
-        color: #FFFFFF !important;
-    }}
-
-    /* CORREÇÃO UX 2: Proteção dos Campos de Formulário (Brancos com Letra Preta) */
-    .stTextInput input, .stNumberInput input, div[data-baseweb="select"] > div {{ 
-        color: #000000 !important; 
-        background-color: #FFFFFF !important; 
-        border: 1px solid #CCCCCC !important;
-        text-shadow: none !important; 
-    }}
-
-    /* CORREÇÃO UX 3: Força cor de fundo Azul em TODOS os Botões de Ação */
-    .stButton > button, 
-    .stDownloadButton > button,
-    div[data-testid="stFormSubmitButton"] button,
-    div[data-testid="stFileUploader"] button {{
-        background-color: #0056B3 !important;
-        border: 1px solid #004494 !important;
-    }}
-
-    /* CORREÇÃO UX 4: Força texto Branco em todos os elementos internos dos botões */
-    .stButton > button *,
-    .stDownloadButton > button *,
-    div[data-testid="stFormSubmitButton"] button *,
-    div[data-testid="stFileUploader"] button * {{
-        color: #FFFFFF !important;
-        font-weight: bold !important;
-        text-shadow: none !important;
-    }}
-
-    /* Efeito Hover (Interação do Mouse nos Botões) */
-    .stButton > button:hover, 
-    .stDownloadButton > button:hover,
-    div[data-testid="stFormSubmitButton"] button:hover,
-    div[data-testid="stFileUploader"] button:hover {{
-        background-color: #004494 !important;
-        border: 1px solid #002a5c !important;
-    }}
+    /* Suavização de interface */
+    .stButton > button { border-radius: 8px !important; transition: 0.3s; }
+    .stButton > button:hover { transform: scale(1.02); }
     </style>
     """
-    st.markdown(css_base, unsafe_allow_html=True)
 
-# [styles.py][Correção de Acessibilidade: Expanders e Botões][2026-02-26 08:15][v2.7][136 linhas]
+    css_tema = ""
+
+    if tema == "🌑 Escuro":
+        css_tema = """
+        <style>
+        .stApp { background-color: #0e1117; color: #fafafa; }
+        section[data-testid="stSidebar"] { background-color: #1a1c24; }
+        .stButton > button { background-color: #0056b3 !important; color: white !important; font-weight: bold; border: none; }
+        </style>
+        """
+
+    elif tema == "☀️ Claro":
+        css_tema = """
+        <style>
+        .stApp { background-color: #ffffff !important; }
+        /* Força o preto em TUDO no modo claro */
+        h1, h2, h3, h4, label, p, span, .stMarkdown { color: #000000 !important; }
+        </style>
+        """
+    
+    elif tema == "🏢 Cinza (Prime)":
+        css_tema = """
+        <style>
+        .stApp { background-color: #262730; color: #ffffff; }
+        section[data-testid="stSidebar"] { background-color: #111111; }
+        h1, h2, h3, h4, label, div, span, .stMarkdown { color: #ffffff !important; }
+        .stButton > button { background-color: #444444 !important; color: white !important; border: 1px solid #555; }
+        </style>
+        """
+
+    elif tema == "🏀 Fundo Imagem":
+        # Busca a imagem em Base64 do banco para evitar links quebrados
+        b64_img = db.obter_imagem_fundo_db()
+        if b64_img:
+            css_tema = f"""
+            <style>
+            .stApp {{
+                background-image: linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)), 
+                url("data:image/png;base64,{b64_img}");
+                background-size: cover; 
+                background-position: center; 
+                background-attachment: fixed; 
+                color: #000;
+            }}
+            /* Contraste absoluto para Dashboard de BI */
+            h1, h2, h3, h4, label, p, span, .stMarkdown {{ color: #000 !important; font-weight: 700 !important; }}
+            .stButton > button {{ 
+                background-color: #ffc107 !important; 
+                color: #000 !important; 
+                font-weight: bold; 
+                border: 1px solid #d39e00; 
+            }}
+            </style>"""
+        else:
+            css_tema = "<style>.stApp { background-color: #f0f2f6; }</style>"
+
+    # 3. INJEÇÃO MESTRE: O parâmetro unsafe_allow_html=True é o que "mata" o texto na tela
+    st.markdown(css_base + css_tema, unsafe_allow_html=True)
+
+# [styles.py][Edição Marvel Prime v5.6 Final][2026-02-26 17:15]

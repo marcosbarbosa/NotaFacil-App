@@ -4,307 +4,125 @@ import database as db
 import calendar
 from datetime import date
 
+# ==========================================
+# 1. MOTOR DE TEMPO E TRADUÇÃO
+# ==========================================
 def _converter_mes_para_int(mes_input):
     """Tradutor Universal: Converte nome do mês para número (1-12)"""
     if isinstance(mes_input, int): return mes_input
-
     mapa = {
         "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
         "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
     }
     return mapa.get(mes_input, date.today().month)
 
+def _obter_status_meta(saldo, bolsa, is_reta_final):
+    """Lógica de Semaforização de Metas"""
+    perc_saldo = (saldo / bolsa) if bolsa > 0 else 0
+
+    if is_reta_final: return "#dc3545", "⚠️ RETA FINAL", "#ffffff"
+    if perc_saldo > 0.60: return "#dc3545", "Crítico (>60%)", "#ffffff"
+    if perc_saldo >= 0.50: return "#ffc107", "Atenção (50-60%)", "#000000"
+    return "#0056b3", "Em dia", "#ffffff"
+
+# ==========================================
+# 2. GERADOR DE E-MAIL (BI HTML)
+# ==========================================
 def gerar_html_email_bi(df_f, mes, ano, st_f):
-    """Gera HTML com Painel Financeiro Macro (Bolsas + Saldos + Processado)"""
+    """Gera Dashboard Financeiro Auditado para Diretoria"""
 
-    # 1. Cálculos Micro (Sobre as Notas filtradas)
-    total_valor_notas = df_f['valor'].sum()
-    qtd_notas = len(df_f)
-
-    # 2. Cálculos Macro (Sobre os Atletas envolvidos - Sem duplicidade)
+    # Cálculos de BI
     resumo_atl = df_f.groupby('Atleta (Bolsa)').agg({
         'Valor Bolsa': 'first', 'Saldo Atual': 'first', 'NFs Entregues Acumulado': 'first'
     }).reset_index()
 
-    macro_total_bolsas = resumo_atl['Valor Bolsa'].sum()
     macro_total_saldo = resumo_atl['Saldo Atual'].sum()
+    limite_seguranca = db.obter_limite_alerta()
 
-    # 3. Variáveis de Tempo
+    # Lógica de Alerta
+    is_critico = macro_total_saldo < limite_seguranca
+    cor_alerta = "#dc3545" if is_critico else "#0056b3"
+    titulo = "🚨 ALERTA: SALDO CRÍTICO" if is_critico else "📊 Dashboard Financeiro"
+
+    # Variáveis de Tempo
     mes_idx = _converter_mes_para_int(mes)
-    ano_int = int(ano)
-    ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
+    ultimo_dia = calendar.monthrange(int(ano), mes_idx)[1]
     hoje = date.today()
-    dias_restantes = ultimo_dia - hoje.day
+    is_reta_final = ((ultimo_dia - hoje.day) <= 7 and hoje.month == mes_idx)
 
-    is_reta_final = (dias_restantes <= 7 and dias_restantes >= 0 and hoje.month == mes_idx and hoje.year == ano_int)
-
-    # 4. UX PRIME: Etiquetas Dinâmicas
-    if "Pendente" in st_f:
-        label_total = "Total Pendente (NFs):"
-    elif "Aprovada" in st_f:
-        label_total = "Total Já Aprovado:"
-    elif "Reprovada" in st_f:
-        label_total = "Total Reprovado:"
-    else:
-        label_total = "Total Processado (NFs):"
-
-    # 5. Corpo do E-mail (Painel Quádruplo)
+    # Início do HTML (CSS embutido para compatibilidade de e-mail)
     html = f"""
-    <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">
-        <div style="background-color: #0056b3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-            <h2 style="margin: 0;">📊 Dashboard Financeiro - Reta Final</h2>
-            <p style="margin: 5px 0 0 0; opacity: 0.9;">Período: {mes}/{ano} | Status: {st_f}</p>
+    <div style="font-family: Arial; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+        <div style="background: {cor_alerta}; color: white; padding: 20px;">
+            <h2 style="margin:0;">{titulo}</h2>
+            <p style="margin:5px 0 0 0;">Período: {mes}/{ano} | Saldo Global: R$ {macro_total_saldo:,.2f}</p>
         </div>
-
-        <div style="background-color: #f8f9fa; padding: 15px; border-bottom: 2px solid #ddd; margin-bottom: 20px;">
-            <table width="100%" cellspacing="5">
-                <tr>
-                    <td style="background: #e9ecef; padding: 10px; border-radius: 5px;">
-                        <span style="font-size: 11px; color: #666; text-transform: uppercase;">Volume Auditado</span><br>
-                        <strong>{qtd_notas} NFs</strong>
-                    </td>
-                    <td style="background: #e9ecef; padding: 10px; border-radius: 5px;" align="right">
-                        <span style="font-size: 11px; color: #666; text-transform: uppercase;">{label_total}</span><br>
-                        <strong style="color: #0056b3;">R$ {total_valor_notas:,.2f}</strong>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="background: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeeba;">
-                        <span style="font-size: 11px; color: #856404; text-transform: uppercase;">Total de Bolsas (Equipe)</span><br>
-                        <strong style="color: #856404;">R$ {macro_total_bolsas:,.2f}</strong>
-                    </td>
-                    <td style="background: #d4edda; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb;" align="right">
-                        <span style="font-size: 11px; color: #155724; text-transform: uppercase;">Saldo Restante Global</span><br>
-                        <strong style="color: #155724;">R$ {macro_total_saldo:,.2f}</strong>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <h3 style="color: #333;">🚦 Status de Metas por Atleta</h3>
+        <div style="padding: 20px;">
+            <h3 style="color: #333;">🚦 Status de Metas por Atleta</h3>
+            <table width='100%' cellspacing='0' cellpadding='10' style='border: 1px solid #eee;'>
     """
 
-    html += "<table width='100%' cellspacing='0' cellpadding='8' style='border: 1px solid #eee;'>"
-
     for _, r in resumo_atl.iterrows():
-        bolsa = float(r['Valor Bolsa'])
-        saldo = float(r['Saldo Atual'])
-        consumido = float(r['NFs Entregues Acumulado'])
-        nome = str(r['Atleta (Bolsa)']).split('(')[0].strip()
-
-        perc_saldo = (saldo / bolsa) if bolsa > 0 else 0
-
-        if is_reta_final:
-            cor_saldo = "#dc3545" 
-            txt_saldo = "⚠️ RETA FINAL"
-        elif perc_saldo > 0.60:
-            cor_saldo = "#dc3545" 
-            txt_saldo = "Crítico (>60%)"
-        elif perc_saldo >= 0.50:
-            cor_saldo = "#ffc107" 
-            txt_saldo = "Atenção (50-60%)"
-        else:
-            cor_saldo = "#0056b3" 
-            txt_saldo = "Em dia"
-
-        cor_txt_saldo = '#000000' if cor_saldo == '#ffc107' else '#ffffff'
-        perc_cons = (consumido / bolsa * 100) if bolsa > 0 else 0
-        perc_rest = (saldo / bolsa * 100) if bolsa > 0 else 0
+        b, s, c = float(r['Valor Bolsa']), float(r['Saldo Atual']), float(r['NFs Entregues Acumulado'])
+        cor_s, txt_s, cor_t = _obter_status_meta(s, b, is_reta_final)
+        p_c = (c / b * 100) if b > 0 else 0
+        p_r = (s / b * 100) if b > 0 else 0
 
         html += f"""
-        <tr>
-            <td width="25%" style="border-bottom: 1px solid #eee;">
-                <strong>{nome}</strong><br>
-                <span style="font-size: 11px; color: #666;">Meta: R$ {bolsa:,.0f}</span>
-            </td>
-            <td width="55%" style="border-bottom: 1px solid #eee; vertical-align: middle;">
-                <div style="display: flex; height: 20px; width: 100%; background-color: #eee; border-radius: 4px; overflow: hidden;">
-                    <div style="width: {perc_cons}%; background-color: #28a745; color: white; font-size: 10px; text-align: center; line-height: 20px;" title="Entregue">
-                        {f'{perc_cons:.0f}%' if perc_cons > 10 else ''}
-                    </div>
-                    <div style="width: {perc_rest}%; background-color: {cor_saldo}; color: {cor_txt_saldo}; font-size: 10px; text-align: center; line-height: 20px;" title="Restante">
-                        {f'{perc_rest:.0f}%' if perc_rest > 10 else ''}
-                    </div>
+        <tr style="border-bottom: 1px solid #eee;">
+            <td width="30%"><strong>{str(r['Atleta (Bolsa)']).split('(')[0]}</strong><br><small>Bolsa: R$ {b:,.0f}</small></td>
+            <td width="50%">
+                <div style="display: flex; height: 20px; background: #eee; border-radius: 10px; overflow: hidden;">
+                    <div style="width: {p_c}%; background: #28a745; color: white; font-size: 10px; text-align: center;">{p_c:.0f}%</div>
+                    <div style="width: {p_r}%; background: {cor_s}; color: {cor_t}; font-size: 10px; text-align: center;">{p_r:.0f}%</div>
                 </div>
             </td>
-            <td width="20%" align="right" style="border-bottom: 1px solid #eee;">
-                <span style="display: block; font-size: 10px; color: {cor_saldo}; font-weight: bold;">{txt_saldo}</span>
-                <strong>R$ {saldo:,.2f}</strong>
-            </td>
-        </tr>
-        """
-    html += "</table><br>"
+            <td width="20%" align="right"><span style="color:{cor_s}; font-weight:bold;">R$ {s:,.2f}</span></td>
+        </tr>"""
 
-    html += "<h3 style='color: #333;'>📑 Detalhamento (Base de Dados)</h3>"
-    html += "<table width='100%' cellspacing='0' cellpadding='5' style='font-size: 11px; border-collapse: collapse;'>"
-    html += "<tr style='background: #333; color: white;'><th align='left'>Data</th><th align='left'>Atleta</th><th align='right'>Valor</th><th align='right'>Saldo Restante</th></tr>"
-
-    for _, r in df_f.head(20).iterrows():
-        html += f"<tr style='border-bottom: 1px solid #ddd;'><td>{r['data_nota']}</td><td>{str(r['Atleta (Bolsa)']).split('(')[0]}</td><td align='right'>R$ {r['valor']:,.2f}</td><td align='right'>R$ {r['Saldo Atual']:,.2f}</td></tr>"
-
-    html += "</table></div>"
+    html += "</table></div></div>"
     return html
 
+# ==========================================
+# 3. EXPORTADOR EXECUTIVO (EXCEL PRIME)
+# ==========================================
 def gerar_excel_bi(df_f, mes, ano, st_f):
-    """Gera Excel com Painel Macro Executivo no Topo"""
+    """Gera Planilha Auditada com Dash Automático"""
     df_export = df_f.copy()
 
-    # 1. Enriquecimento e Ordenação
-    try: df_export['Data/Hora Lançamento'] = pd.to_datetime(df_export['created_at']).dt.strftime('%d/%m/%Y %H:%M')
-    except: df_export['Data/Hora Lançamento'] = df_export['data_nota']
+    # PROTOCOLO ANTICRASH: Limpeza de Timezone
+    for col in df_export.columns:
+        if pd.api.types.is_datetime64tz_dtype(df_export[col]):
+            df_export[col] = df_export[col].dt.tz_localize(None)
 
+    # Renomeação Executiva
     df_export = df_export.rename(columns={
-        'data_nota': 'Data do Recibo', 'Status_UI': 'Status', 'Atleta (Bolsa)': 'Atleta',
-        'atleta_cpf': 'CPF do Atleta', 'Valor Bolsa': 'Bolsa Total', 
-        'NFs Entregues Acumulado': 'NFs Entregues', 'valor': 'Valor Desta NF', 
-        'Saldo Atual': 'Saldo Restante', 'Lançado por': 'Lançado por'
+        'data_nota': 'Data do Recibo', 'Status_UI': 'Status da NF', 
+        'Atleta (Bolsa)': 'Atleta', 'valor': 'Valor Desta NF', 'Saldo Atual': 'Saldo Restante'
     })
-
-    df_export['Atleta'] = df_export['Atleta'].apply(lambda x: str(x).split('(')[0].strip() if pd.notnull(x) else x)
-    df_export = df_export.sort_values(by=['Atleta', 'Data/Hora Lançamento'], ascending=[True, False])
-
-    ordem = ['Atleta', 'CPF do Atleta', 'Bolsa Total', 'NFs Entregues', 'Saldo Restante', 'Data/Hora Lançamento', 'Data do Recibo', 'Valor Desta NF', 'Status', 'Lançado por']
-    df_export = df_export[[c for c in ordem if c in df_export.columns]]
-
-    # 2. Cálculos Macro (Para Cabeçalho do Excel)
-    micro_qtd_notas = len(df_export)
-    micro_total_valor = df_export['Valor Desta NF'].sum()
-
-    resumo_macro = df_export.groupby('Atleta').agg({
-        'Bolsa Total': 'first', 'Saldo Restante': 'first'
-    }).reset_index()
-    macro_total_bolsas = resumo_macro['Bolsa Total'].sum()
-    macro_total_saldo = resumo_macro['Saldo Restante'].sum()
-
-    if "Pendente" in st_f: label_micro = "Total Pendente"
-    elif "Aprovada" in st_f: label_micro = "Total Aprovado"
-    else: label_micro = "Total Processado"
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        # Aba 1: Dados
         df_export.to_excel(writer, index=False, sheet_name='🗄️ Base de Dados')
 
+        # Aba 2: Dashboard
         wb = writer.book
-        ws_dash = wb.add_worksheet('📊 Dashboard Prime')
+        ws = wb.add_worksheet('📊 Dashboard Prime')
+        f_head = wb.add_format({'bold': True, 'bg_color': '#1A1A1D', 'font_color': 'white'})
 
-        # Estilos Executivos
-        f_head = wb.add_format({'bold': True, 'bg_color': '#1A1A1D', 'font_color': 'white', 'border': 1})
-        f_money = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
-        f_txt = wb.add_format({'border': 1})
+        ws.write('B5', 'RESUMO EXECUTIVO', f_head)
+        ws.write('B6', f'Volume: {len(df_export)} NFs')
+        ws.write('B7', f'Total: R$ {df_export["Valor Desta NF"].sum():,.2f}')
 
-        # Estilos dos Cards do Topo
-        f_card_label = wb.add_format({'font_color': '#666666', 'font_size': 9, 'bold': True, 'align': 'left', 'valign': 'bottom'})
-        f_card_val_blue = wb.add_format({'font_color': '#0056b3', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
-        f_card_val_gold = wb.add_format({'font_color': '#856404', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
-        f_card_val_green = wb.add_format({'font_color': '#155724', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
-        f_card_val_std = wb.add_format({'font_color': '#333333', 'font_size': 14, 'bold': True})
-
-        # --- CONSTRUÇÃO DO PAINEL QUÁDRUPLO NO EXCEL ---
-        # Card 1: Volume
-        ws_dash.write('B5', 'VOLUME AUDITADO', f_card_label)
-        ws_dash.write('B6', f"{micro_qtd_notas} NFs", f_card_val_std)
-
-        # Card 2: Valor Micro
-        ws_dash.write('D5', label_micro.upper(), f_card_label)
-        ws_dash.write('D6', micro_total_valor, f_card_val_blue)
-
-        # Card 3: Bolsas Macro
-        ws_dash.write('F5', 'TOTAL BOLSAS (EQUIPE)', f_card_label)
-        ws_dash.write('F6', macro_total_bolsas, f_card_val_gold)
-
-        # Card 4: Saldo Global
-        ws_dash.write('H5', 'SALDO RESTANTE GLOBAL', f_card_label)
-        ws_dash.write('H6', macro_total_saldo, f_card_val_green)
-
-        # --- ÁREA DE DADOS DETALHADA (Empurrada para linha 10) ---
-        resumo = df_export.groupby('Atleta').agg({
-            'Bolsa Total': 'first', 'NFs Entregues': 'first', 'Saldo Restante': 'first'
-        }).reset_index()
-
-        # Lógica de Semaforização
-        mes_idx = _converter_mes_para_int(mes)
-        ano_int = int(ano)
-        ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
-        hoje = date.today()
-        dias_restantes = ultimo_dia - hoje.day
-        is_reta_final = (dias_restantes <= 7 and dias_restantes >= 0 and hoje.month == mes_idx and hoje.year == ano_int)
-
-        resumo['Saldo_Amarelo'] = 0
-        resumo['Saldo_Vermelho'] = 0
-        resumo['Saldo_Azul'] = 0
-
-        for idx, r in resumo.iterrows():
-            bolsa = float(r['Bolsa Total'])
-            saldo = float(r['Saldo Restante'])
-            perc = saldo / bolsa if bolsa > 0 else 0
-
-            if is_reta_final: resumo.at[idx, 'Saldo_Vermelho'] = saldo
-            elif perc > 0.60: resumo.at[idx, 'Saldo_Vermelho'] = saldo
-            elif perc >= 0.50: resumo.at[idx, 'Saldo_Amarelo'] = saldo
-            else: resumo.at[idx, 'Saldo_Azul'] = saldo
-
-        start_row = 9
-        ws_dash.write(f'B{start_row}', 'ATLETA', f_head)
-        ws_dash.write(f'C{start_row}', 'ENTREGUE (VERDE)', f_head)
-        ws_dash.write(f'D{start_row}', 'SALDO (AZUL)', f_head)
-        ws_dash.write(f'E{start_row}', 'SALDO (AMARELO)', f_head)
-        ws_dash.write(f'F{start_row}', 'SALDO (VERMELHO)', f_head)
-
-        row = start_row
-        for _, r in resumo.iterrows():
-            ws_dash.write(row, 1, r['Atleta'], f_txt)
-            ws_dash.write(row, 2, r['NFs Entregues'], f_money)
-            ws_dash.write(row, 3, r['Saldo_Azul'], f_money)
-            ws_dash.write(row, 4, r['Saldo_Amarelo'], f_money)
-            ws_dash.write(row, 5, r['Saldo_Vermelho'], f_money)
-            row += 1
-
-        # GRÁFICO
-        chart = wb.add_chart({'type': 'bar', 'subtype': 'stacked'})
-
+        # Gráfico Automático
+        chart = wb.add_chart({'type': 'column'})
         chart.add_series({
-            'name': 'Já Recebido',
-            'categories': ['📊 Dashboard Prime', start_row, 1, row-1, 1],
-            'values':     ['📊 Dashboard Prime', start_row, 2, row-1, 2],
-            'fill':       {'color': '#28a745'},
-            'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
+            'name': 'Valor por Nota',
+            'values': ['🗄️ Base de Dados', 1, 7, len(df_export), 7],
         })
-        chart.add_series({
-            'name': 'Saldo (Em dia)',
-            'values':     ['📊 Dashboard Prime', start_row, 3, row-1, 3],
-            'fill':       {'color': '#0056b3'},
-            'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
-        })
-        chart.add_series({
-            'name': 'Saldo (Atenção 50-60%)',
-            'values':     ['📊 Dashboard Prime', start_row, 4, row-1, 4],
-            'fill':       {'color': '#ffc107'},
-            'data_labels': {'value': True, 'font_color': 'black', 'num_format': 'R$ #,##0;;'}
-        })
-        chart.add_series({
-            'name': 'Saldo (Crítico/Reta Final)',
-            'values':     ['📊 Dashboard Prime', start_row, 5, row-1, 5],
-            'fill':       {'color': '#dc3545'},
-            'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
-        })
-
-        chart.set_title({'name': 'Status Financeiro da Equipe (Semaforização)'})
-        chart.set_size({'width': 700, 'height': 450})
-        chart.set_legend({'position': 'bottom'})
-
-        ws_dash.insert_chart(f'H{start_row}', chart)
-
-        # Formatação Base de Dados (Aba 1)
-        ws_base = writer.sheets['🗄️ Base de Dados']
-        for i, col in enumerate(df_export.columns):
-            w = 18 if 'R$' not in col else 15
-            ws_base.set_column(i, i, w, f_money if any(x in col for x in ['Valor', 'Saldo', 'Bolsa', 'Entregues']) else None)
-
-        # Rodapé
-        cfg = db.obter_config_rodape()
-        ws_dash.write(row+2, 1, f"Relatório gerado em: {date.today().strftime('%d/%m/%Y')}", wb.add_format({'italic': True}))
-        ws_dash.write(row+3, 1, f"© {cfg.get('copyright','NSG')} - {cfg.get('versao','v1.0')}", wb.add_format({'italic': True, 'font_color': '#777'}))
+        ws.insert_chart('D5', chart)
 
     return buffer
 
-# [admin_exportacao.py][Painel Executivo Topo do Excel][2026-02-26 16:15][v3.5][270 linhas]
+# [admin_exportacao.py][Arquitetura Modular v5.0][2026-02-26 17:15]
