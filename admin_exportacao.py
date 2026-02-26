@@ -29,7 +29,7 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
     macro_total_bolsas = resumo_atl['Valor Bolsa'].sum()
     macro_total_saldo = resumo_atl['Saldo Atual'].sum()
 
-    # 3. Preparação das Variáveis de Tempo
+    # 3. Variáveis de Tempo
     mes_idx = _converter_mes_para_int(mes)
     ano_int = int(ano)
     ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
@@ -48,7 +48,7 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
     else:
         label_total = "Total Processado (NFs):"
 
-    # 5. Construção do Corpo do E-mail (Novo Painel Quádruplo)
+    # 5. Corpo do E-mail (Painel Quádruplo)
     html = f"""
     <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">
         <div style="background-color: #0056b3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
@@ -146,9 +146,10 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
     return html
 
 def gerar_excel_bi(df_f, mes, ano, st_f):
-    """Gera Excel com Painel Macro e Ordenação Prime"""
+    """Gera Excel com Painel Macro Executivo no Topo"""
     df_export = df_f.copy()
 
+    # 1. Enriquecimento e Ordenação
     try: df_export['Data/Hora Lançamento'] = pd.to_datetime(df_export['created_at']).dt.strftime('%d/%m/%Y %H:%M')
     except: df_export['Data/Hora Lançamento'] = df_export['data_nota']
 
@@ -160,11 +161,24 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
     })
 
     df_export['Atleta'] = df_export['Atleta'].apply(lambda x: str(x).split('(')[0].strip() if pd.notnull(x) else x)
-
     df_export = df_export.sort_values(by=['Atleta', 'Data/Hora Lançamento'], ascending=[True, False])
 
     ordem = ['Atleta', 'CPF do Atleta', 'Bolsa Total', 'NFs Entregues', 'Saldo Restante', 'Data/Hora Lançamento', 'Data do Recibo', 'Valor Desta NF', 'Status', 'Lançado por']
     df_export = df_export[[c for c in ordem if c in df_export.columns]]
+
+    # 2. Cálculos Macro (Para Cabeçalho do Excel)
+    micro_qtd_notas = len(df_export)
+    micro_total_valor = df_export['Valor Desta NF'].sum()
+
+    resumo_macro = df_export.groupby('Atleta').agg({
+        'Bolsa Total': 'first', 'Saldo Restante': 'first'
+    }).reset_index()
+    macro_total_bolsas = resumo_macro['Bolsa Total'].sum()
+    macro_total_saldo = resumo_macro['Saldo Restante'].sum()
+
+    if "Pendente" in st_f: label_micro = "Total Pendente"
+    elif "Aprovada" in st_f: label_micro = "Total Aprovado"
+    else: label_micro = "Total Processado"
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -173,31 +187,41 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
         wb = writer.book
         ws_dash = wb.add_worksheet('📊 Dashboard Prime')
 
+        # Estilos Executivos
         f_head = wb.add_format({'bold': True, 'bg_color': '#1A1A1D', 'font_color': 'white', 'border': 1})
         f_money = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
         f_txt = wb.add_format({'border': 1})
 
-        ws_base = writer.sheets['🗄️ Base de Dados']
-        for i, col in enumerate(df_export.columns):
-            w = 18 if 'R$' not in col else 15
-            ws_base.set_column(i, i, w, f_money if any(x in col for x in ['Valor', 'Saldo', 'Bolsa', 'Entregues']) else None)
+        # Estilos dos Cards do Topo
+        f_card_label = wb.add_format({'font_color': '#666666', 'font_size': 9, 'bold': True, 'align': 'left', 'valign': 'bottom'})
+        f_card_val_blue = wb.add_format({'font_color': '#0056b3', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
+        f_card_val_gold = wb.add_format({'font_color': '#856404', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
+        f_card_val_green = wb.add_format({'font_color': '#155724', 'font_size': 14, 'bold': True, 'num_format': 'R$ #,##0.00'})
+        f_card_val_std = wb.add_format({'font_color': '#333333', 'font_size': 14, 'bold': True})
 
-        # CÁLCULOS MACRO PARA O EXCEL
+        # --- CONSTRUÇÃO DO PAINEL QUÁDRUPLO NO EXCEL ---
+        # Card 1: Volume
+        ws_dash.write('B5', 'VOLUME AUDITADO', f_card_label)
+        ws_dash.write('B6', f"{micro_qtd_notas} NFs", f_card_val_std)
+
+        # Card 2: Valor Micro
+        ws_dash.write('D5', label_micro.upper(), f_card_label)
+        ws_dash.write('D6', micro_total_valor, f_card_val_blue)
+
+        # Card 3: Bolsas Macro
+        ws_dash.write('F5', 'TOTAL BOLSAS (EQUIPE)', f_card_label)
+        ws_dash.write('F6', macro_total_bolsas, f_card_val_gold)
+
+        # Card 4: Saldo Global
+        ws_dash.write('H5', 'SALDO RESTANTE GLOBAL', f_card_label)
+        ws_dash.write('H6', macro_total_saldo, f_card_val_green)
+
+        # --- ÁREA DE DADOS DETALHADA (Empurrada para linha 10) ---
         resumo = df_export.groupby('Atleta').agg({
             'Bolsa Total': 'first', 'NFs Entregues': 'first', 'Saldo Restante': 'first'
         }).reset_index()
 
-        # Inserção do Resumo Macro no Excel
-        f_macro_label = wb.add_format({'bold': True, 'font_color': '#555'})
-        f_macro_val = wb.add_format({'bold': True, 'num_format': 'R$ #,##0.00', 'font_size': 12})
-
-        ws_dash.write('B6', 'Total de Bolsas (Global):', f_macro_label)
-        ws_dash.write('C6', resumo['Bolsa Total'].sum(), f_macro_val)
-
-        ws_dash.write('E6', 'Saldo Restante (Global):', f_macro_label)
-        ws_dash.write('F6', resumo['Saldo Restante'].sum(), f_macro_val)
-
-        # Lógica de Semaforização e Gráfico
+        # Lógica de Semaforização
         mes_idx = _converter_mes_para_int(mes)
         ano_int = int(ano)
         ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
@@ -219,7 +243,6 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
             elif perc >= 0.50: resumo.at[idx, 'Saldo_Amarelo'] = saldo
             else: resumo.at[idx, 'Saldo_Azul'] = saldo
 
-        # Tabela Detalhada (movida para linha 9 por causa do resumo macro)
         start_row = 9
         ws_dash.write(f'B{start_row}', 'ATLETA', f_head)
         ws_dash.write(f'C{start_row}', 'ENTREGUE (VERDE)', f_head)
@@ -236,9 +259,9 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
             ws_dash.write(row, 5, r['Saldo_Vermelho'], f_money)
             row += 1
 
+        # GRÁFICO
         chart = wb.add_chart({'type': 'bar', 'subtype': 'stacked'})
 
-        # Atualizando referências do gráfico para a nova posição (linha 9)
         chart.add_series({
             'name': 'Já Recebido',
             'categories': ['📊 Dashboard Prime', start_row, 1, row-1, 1],
@@ -246,21 +269,18 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
             'fill':       {'color': '#28a745'},
             'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
         })
-
         chart.add_series({
             'name': 'Saldo (Em dia)',
             'values':     ['📊 Dashboard Prime', start_row, 3, row-1, 3],
             'fill':       {'color': '#0056b3'},
             'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
         })
-
         chart.add_series({
             'name': 'Saldo (Atenção 50-60%)',
             'values':     ['📊 Dashboard Prime', start_row, 4, row-1, 4],
             'fill':       {'color': '#ffc107'},
             'data_labels': {'value': True, 'font_color': 'black', 'num_format': 'R$ #,##0;;'}
         })
-
         chart.add_series({
             'name': 'Saldo (Crítico/Reta Final)',
             'values':     ['📊 Dashboard Prime', start_row, 5, row-1, 5],
@@ -274,10 +294,17 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
 
         ws_dash.insert_chart(f'H{start_row}', chart)
 
+        # Formatação Base de Dados (Aba 1)
+        ws_base = writer.sheets['🗄️ Base de Dados']
+        for i, col in enumerate(df_export.columns):
+            w = 18 if 'R$' not in col else 15
+            ws_base.set_column(i, i, w, f_money if any(x in col for x in ['Valor', 'Saldo', 'Bolsa', 'Entregues']) else None)
+
+        # Rodapé
         cfg = db.obter_config_rodape()
         ws_dash.write(row+2, 1, f"Relatório gerado em: {date.today().strftime('%d/%m/%Y')}", wb.add_format({'italic': True}))
         ws_dash.write(row+3, 1, f"© {cfg.get('copyright','NSG')} - {cfg.get('versao','v1.0')}", wb.add_format({'italic': True, 'font_color': '#777'}))
 
     return buffer
 
-# [admin_exportacao.py][Painel Macro Bolsas/Saldos + Gráfico Ajustado][2026-02-26 15:30][v3.4][245 linhas]
+# [admin_exportacao.py][Painel Executivo Topo do Excel][2026-02-26 16:15][v3.5][270 linhas]
