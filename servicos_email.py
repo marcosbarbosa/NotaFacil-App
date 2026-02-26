@@ -51,9 +51,8 @@ def recuperar_senha_usuario(email_user, nome_user, senha_real):
     msg.attach(MIMEText(html_body, 'html'))
     return _conectar_smtp(usr, pwd, email_user, msg)
 
-def recuperar_senha_admin(senha_master):
-    """Dispara a senha Master para a Diretoria"""
-    email_destino = "dcatletas@gmail.com"
+def recuperar_senha_admin(senha_master, email_destino):
+    """Dispara a senha Master para o e-mail da Diretoria (Dinâmico)"""
     usr = os.environ.get("EMAIL_USER")
     pwd = os.environ.get("EMAIL_PASS")
     if not usr or not pwd: return False, "SMTP não configurado."
@@ -73,4 +72,4 @@ def recuperar_senha_admin(senha_master):
     msg.attach(MIMEText(html, 'html'))
     return _conectar_smtp(usr, pwd, email_destino, msg)
 
-# [servicos_email.py][Módulo Isolado de Mensageria SMTP][2026-02-25 15:50][v1.0][68 linhas]
+# [servicos_email.py][Remoção do e-mail hardcoded][2026-02-26 09:30][v1.1][68 linhas]

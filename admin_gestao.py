@@ -91,18 +91,22 @@ def renderizar_aba_gestao(atl_data, vis_data):
 def renderizar_aba_configuracoes():
     """Módulo MVC isolado para a configuração de Segurança"""
     st.subheader("🔐 Segurança do Sistema")
-    st.info("Aqui você altera a senha mestra que dá acesso à Central de Governança.")
-    n_senha = st.text_input("Nova Senha Admin:", type="password")
-    if st.button("💾 Salvar Nova Senha", type="primary"):
-        if len(n_senha) >= 4:
-            ok, msg = db.atualizar_senha_admin(n_senha)
-            if ok: 
-                st.success(msg)
-                time.sleep(2)
-                st.rerun()
-            else: 
-                st.error("Erro ao salvar no banco de dados.")
-        else:
-            st.warning("A senha deve ter pelo menos 4 caracteres.")
+    st.info("Aqui você gerencia as credenciais Master da Diretoria.")
 
-# [admin_gestao.py][Isolamento do Core de RH e Segurança][2026-02-25 16:15][v1.0][96 linhas]
+    email_atual = db.obter_email_admin()
+
+    with st.form("form_cfg_master"):
+        n_email = st.text_input("E-mail Oficial da Diretoria (Para resgate de senha):", value=email_atual)
+        n_senha = st.text_input("Nova Senha Admin (Deixe em branco para não alterar):", type="password")
+
+        if st.form_submit_button("💾 Salvar Configurações", type="primary"):
+            if "@" in n_email:
+                db.atualizar_email_admin(n_email)
+            if n_senha and len(n_senha) >= 4:
+                db.atualizar_senha_admin(n_senha)
+
+            st.success("Configurações salvas com sucesso!")
+            time.sleep(2)
+            st.rerun()
+
+# [admin_gestao.py][Aba de Configurações Dinâmicas Master][2026-02-26 09:30][v1.1][109 linhas]

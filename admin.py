@@ -34,8 +34,11 @@ def exibir_sala_de_guerra():
         st.divider()
         if st.sidebar.button("🆘 Esqueci a Senha"):
             with st.sidebar.spinner("Solicitando resgate..."):
-                ok, msg = email_svc.recuperar_senha_admin(senha_master)
-                if ok: st.sidebar.success(msg)
+                # Busca o e-mail cadastrado no banco para envio
+                email_diretoria = db.obter_email_admin()
+                ok, msg = email_svc.recuperar_senha_admin(senha_master, email_diretoria)
+
+                if ok: st.sidebar.success(f"Senha enviada para a Diretoria ({email_diretoria})")
                 else: st.sidebar.error(msg)
 
-# [admin.py][Roteador Arquitetural Administrativo Limpo][2026-02-25 16:15][v8.0][37 linhas]
+# [admin.py][Injeção Dinâmica de E-mail de Resgate][2026-02-26 09:30][v8.1][40 linhas]

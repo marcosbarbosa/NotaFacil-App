@@ -116,8 +116,23 @@ def obter_senha_admin():
 
 def atualizar_senha_admin(nova_senha):
     try:
-        supabase.table('configuracoes').update({'valor': nova_senha}).eq('chave', 'senha_admin').execute()
+        supabase.table('configuracoes').upsert({'chave': 'senha_admin', 'valor': nova_senha}).execute()
         return True, "Senha Master atualizada com sucesso!"
     except Exception as e: return False, str(e)
 
-# [database.py][Refatoração de Clean Code - Remoção do SMTP][2026-02-25 15:50][v2.50][109 linhas]
+def obter_email_admin():
+    """Busca o e-mail da Diretoria no banco, ou usa o remetente como backup"""
+    try:
+        res = supabase.table('configuracoes').select('valor').eq('chave', 'email_admin').execute()
+        if res.data: return res.data[0]['valor']
+    except Exception: pass
+    return os.environ.get("EMAIL_USER", "marcosbarbosa.am@gmail.com")
+
+def atualizar_email_admin(novo_email):
+    """Salva o novo e-mail oficial da Diretoria no banco de dados"""
+    try:
+        supabase.table('configuracoes').upsert({'chave': 'email_admin', 'valor': novo_email}).execute()
+        return True, "E-mail atualizado com sucesso!"
+    except Exception as e: return False, str(e)
+
+# [database.py][Inclusão do E-mail Master Dinâmico][2026-02-26 09:30][v2.60][124 linhas]
