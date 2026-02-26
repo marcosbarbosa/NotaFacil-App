@@ -6,7 +6,7 @@ import database as db
 import funcoes_admin as f_adm
 
 def renderizar_aba_gestao(atl_data, vis_data):
-    """Módulo MVC isolado para Gestão de Usuários e BI"""
+    # ... (MANTENHA O CÓDIGO DA GESTÃO DE USUÁRIOS IGUAL AO ANTERIOR, ou copie este bloco abaixo que é idêntico) ...
     grafico = f_adm.gerar_grafico_consumo(atl_data)
     if grafico: st.plotly_chart(grafico, use_container_width=True)
     st.divider()
@@ -89,24 +89,42 @@ def renderizar_aba_gestao(atl_data, vis_data):
                         else: st.error(msg)
 
 def renderizar_aba_configuracoes():
-    """Módulo MVC isolado para a configuração de Segurança"""
-    st.subheader("🔐 Segurança do Sistema")
-    st.info("Aqui você gerencia as credenciais Master da Diretoria.")
+    """Módulo MVC isolado para a configuração de Segurança e Rodapé"""
+    st.subheader("🔐 Segurança e Identidade")
 
-    email_atual = db.obter_email_admin()
+    tab_seg, tab_vis = st.tabs(["🔑 Credenciais Master", "🎨 Rodapé dos E-mails"])
 
-    with st.form("form_cfg_master"):
-        n_email = st.text_input("E-mail Oficial da Diretoria (Para resgate de senha):", value=email_atual)
-        n_senha = st.text_input("Nova Senha Admin (Deixe em branco para não alterar):", type="password")
+    with tab_seg:
+        st.info("Aqui você gerencia as credenciais Master da Diretoria.")
+        email_atual = db.obter_email_admin()
 
-        if st.form_submit_button("💾 Salvar Configurações", type="primary"):
-            if "@" in n_email:
-                db.atualizar_email_admin(n_email)
-            if n_senha and len(n_senha) >= 4:
-                db.atualizar_senha_admin(n_senha)
+        with st.form("form_cfg_master"):
+            n_email = st.text_input("E-mail Oficial da Diretoria (Para resgate de senha):", value=email_atual)
+            n_senha = st.text_input("Nova Senha Admin (Deixe em branco para não alterar):", type="password")
 
-            st.success("Configurações salvas com sucesso!")
-            time.sleep(2)
-            st.rerun()
+            if st.form_submit_button("💾 Salvar Credenciais", type="primary"):
+                if "@" in n_email: db.atualizar_email_admin(n_email)
+                if n_senha and len(n_senha) >= 4: db.atualizar_senha_admin(n_senha)
+                st.success("Credenciais salvas!")
+                time.sleep(1.5); st.rerun()
 
-# [admin_gestao.py][Aba de Configurações Dinâmicas Master][2026-02-26 09:30][v1.1][109 linhas]
+    with tab_vis:
+        st.info("Configure as informações que aparecem no rodapé de todos os e-mails enviados.")
+        cfg = db.obter_config_rodape()
+
+        with st.form("form_cfg_rodape"):
+            c1, c2 = st.columns(2)
+            inst = c1.text_input("📸 Instagram (ex: @driblecerto)", value=cfg.get('instagram',''))
+            whats = c2.text_input("💬 WhatsApp (ex: (11) 99999-9999)", value=cfg.get('whatsapp',''))
+
+            c3, c4 = st.columns(2)
+            vers = c3.text_input("🔢 Versão do Sistema", value=cfg.get('versao','v1.0.0'))
+            copy = c4.text_input("© Copyright", value=cfg.get('copyright','NSG Basquete'))
+
+            if st.form_submit_button("💾 Atualizar Rodapé Oficial", type="primary"):
+                novos_dados = {"instagram": inst, "whatsapp": whats, "versao": vers, "copyright": copy}
+                ok, msg = db.atualizar_config_rodape(novos_dados)
+                if ok: st.success(msg); time.sleep(1.5); st.rerun()
+                else: st.error(msg)
+
+# [admin_gestao.py][Configuração de Rodapé e Credenciais][2026-02-26 10:15][v1.2][138 linhas]

@@ -7,6 +7,8 @@ import admin_gestao as adm_gst
 def exibir_sala_de_guerra():
     """Roteador Administrativo: Importa os submódulos da Sala de Guerra"""
     senha_master = db.obter_senha_admin()
+
+    # Campo de senha sempre visível na barra
     senha_digitada = st.sidebar.text_input("🔑 Senha Admin", type="password")
 
     if senha_digitada == senha_master:
@@ -27,6 +29,9 @@ def exibir_sala_de_guerra():
             adm_gst.renderizar_aba_configuracoes()
 
     else: 
+        # ACESSIBILIDADE UX: Botão de ação explícito para mobile e leitores de tela
+        btn_entrar = st.sidebar.button("➡️ Entrar", use_container_width=True, type="primary")
+
         if senha_digitada: st.sidebar.error("❌ Senha incorreta.")
 
         st.info("🔒 Acesso restrito à Diretoria. Insira a Senha Admin no menu lateral.")
@@ -38,7 +43,17 @@ def exibir_sala_de_guerra():
                 email_diretoria = db.obter_email_admin()
                 ok, msg = email_svc.recuperar_senha_admin(senha_master, email_diretoria)
 
-                if ok: st.sidebar.success(f"Senha enviada para a Diretoria ({email_diretoria})")
-                else: st.sidebar.error(msg)
+                if ok: 
+                    # BLINDAGEM DE SEGURANÇA: Ofuscação de PII (E-mail)
+                    if "@" in email_diretoria:
+                        partes = email_diretoria.split("@")
+                        prefixo = partes[0][:4] if len(partes[0]) >= 4 else partes[0][:2]
+                        email_oculto = f"{prefixo}***@{partes[1]}"
+                    else:
+                        email_oculto = "***"
 
-# [admin.py][Injeção Dinâmica de E-mail de Resgate][2026-02-26 09:30][v8.1][40 linhas]
+                    st.sidebar.success(f"Senha enviada para a Diretoria ({email_oculto})")
+                else: 
+                    st.sidebar.error(msg)
+
+# [admin.py][Injeção de Botão de Acessibilidade (WCAG)][2026-02-26 10:35][v8.3][51 linhas]

@@ -15,7 +15,7 @@ supabase = conectar()
 def carregar_dados_globais():
     atl = supabase.table('atletas').select("*").execute()
     vis = supabase.table('visitantes').select("*").execute()
-    lan = supabase.table('lancamentos').select("*, atletas(nome, email, cpf, saldo), visitantes(nome, email)").order('created_at', desc=True).execute()
+    lan = supabase.table('lancamentos').select("*, atletas(nome, email, cpf, saldo, bolsa), visitantes(nome, email)").order('created_at', desc=True).execute()
     return atl.data, vis.data, lan.data
 
 def calcular_tag_3x3(sexo, data_nasc):
@@ -121,7 +121,6 @@ def atualizar_senha_admin(nova_senha):
     except Exception as e: return False, str(e)
 
 def obter_email_admin():
-    """Busca o e-mail da Diretoria no banco, ou usa o remetente como backup"""
     try:
         res = supabase.table('configuracoes').select('valor').eq('chave', 'email_admin').execute()
         if res.data: return res.data[0]['valor']
@@ -129,10 +128,34 @@ def obter_email_admin():
     return os.environ.get("EMAIL_USER", "marcosbarbosa.am@gmail.com")
 
 def atualizar_email_admin(novo_email):
-    """Salva o novo e-mail oficial da Diretoria no banco de dados"""
     try:
         supabase.table('configuracoes').upsert({'chave': 'email_admin', 'valor': novo_email}).execute()
         return True, "E-mail atualizado com sucesso!"
     except Exception as e: return False, str(e)
 
-# [database.py][Inclusão do E-mail Master Dinâmico][2026-02-26 09:30][v2.60][124 linhas]
+# --- NOVO: CONFIGURAÇÕES DE RODAPÉ ---
+def obter_config_rodape():
+    """Busca as configurações visuais do rodapé"""
+    padrao = {
+        "instagram": "@driblecerto",
+        "whatsapp": "(11) 99999-9999",
+        "versao": "v1.0.0",
+        "copyright": "NSG Basquete"
+    }
+    try:
+        res = supabase.table('configuracoes').select('*').in_('chave', list(padrao.keys())).execute()
+        if res.data:
+            for item in res.data:
+                padrao[item['chave']] = item['valor']
+    except Exception: pass
+    return padrao
+
+def atualizar_config_rodape(dados):
+    """Salva as configurações do rodapé em lote"""
+    try:
+        for k, v in dados.items():
+            supabase.table('configuracoes').upsert({'chave': k, 'valor': v}).execute()
+        return True, "Rodapé atualizado!"
+    except Exception as e: return False, str(e)
+
+# [database.py][Suporte a Rodapé Dinâmico e Dados Financeiros][2026-02-26 10:15][v2.70][156 linhas]
