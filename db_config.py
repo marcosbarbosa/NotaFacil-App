@@ -39,6 +39,14 @@ def obter_senha_admin():
         return res.data[0]['valor'] if res.data else "admin"
     except: return "admin"
 
+def obter_email_admin():
+    """Busca o e-mail do administrador para relatórios e recuperação de senha"""
+    try:
+        res = supabase.table('configuracoes').select('valor').eq('chave', 'email_admin').execute()
+        return res.data[0]['valor'] if res.data else ""
+    except:
+        return ""
+
 def obter_config_rodape():
     """Busca os metadados de versão e copyright do sistema"""
     padrao = {"instagram": "@driblecerto", "whatsapp": "(11) 99999-9999", "versao": "v1.0.0", "copyright": "NSG Basquete"}
