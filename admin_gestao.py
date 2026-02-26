@@ -1,5 +1,5 @@
 import streamlit as st
-import database as db  # Conector unificado para db_config, db_entidades e db_financeiro
+import database as db  # Conector unificado
 import pandas as pd
 import time
 
@@ -75,13 +75,53 @@ def renderizar_aba_gestao(atl_data, vis_data):
 
 def renderizar_aba_configuracoes():
     """
-    Centro de Comando Prime: Identidade Visual e Governança de Risco.
+    Centro de Comando Prime: Identidade Visual, Risco Financeiro e Comunicação.
     """
-    st.markdown("### ⚙️ Painel de Governança e UX")
+    st.markdown("### ⚙️ Painel de Governança Integrada")
 
-    # 1. GESTÃO DE IDENTIDADE VISUAL
+    col1, col2 = st.columns(2)
+
+    # 1. GESTÃO DE RISCO FINANCEIRO (Lado Esquerdo)
+    with col1:
+        st.subheader("🚨 Risco Financeiro (BI)")
+        limite_atual = db.obter_limite_alerta()
+
+        novo_limite = st.number_input(
+            "Gatilho para Alerta de Saldo Crítico (R$):", 
+            value=limite_atual, 
+            help="O sistema destacará em vermelho se o saldo global ficar abaixo deste valor."
+        )
+
+        if st.button("💾 Salvar Regra de Segurança", use_container_width=True):
+            ok, msg = db.salvar_limite_alerta(novo_limite)
+            if ok:
+                st.success(f"✅ Regra atualizada: Alerta em R$ {novo_limite:,.2f}")
+            else:
+                st.error(msg)
+
+    # 2. GESTÃO DE COMUNICAÇÃO (Lado Direito)
+    with col2:
+        st.subheader("📧 Comunicação Oficial")
+        email_atual = db.obter_email_admin()
+
+        novo_email = st.text_input(
+            "E-mail Padrão da Diretoria:", 
+            value=email_atual,
+            help="Este e-mail será o destinatário padrão na hora de exportar os dashboards de BI."
+        )
+
+        if st.button("💾 Salvar Destinatário", use_container_width=True):
+            ok, msg = db.salvar_email_admin(novo_email)
+            if ok:
+                st.success("✅ E-mail oficial atualizado!")
+            else:
+                st.error(msg)
+
+    st.divider()
+
+    # 3. GESTÃO DE IDENTIDADE VISUAL
     st.subheader("🖼️ Identidade Visual (Fundo do Sistema)")
-    st.info("Suba aqui o arquivo da quadra para que o sistema carregue-o automaticamente.")
+    st.info("Suba aqui o arquivo da quadra para que o sistema carregue-o automaticamente nos temas visuais.")
 
     arquivo_bg = st.file_uploader("Upload do arquivo .png ou .jpg:", type=['png', 'jpg', 'jpeg'])
 
@@ -91,29 +131,11 @@ def renderizar_aba_configuracoes():
                 ok, msg = db.salvar_imagem_fundo_db(arquivo_bg.getvalue())
                 if ok:
                     st.success(msg)
+                    time.sleep(1)
                     st.rerun()
                 else:
                     st.error(msg)
         else:
             st.warning("Selecione um arquivo de imagem primeiro.")
 
-    st.divider()
-
-    # 2. GESTÃO DE RISCO FINANCEIRO
-    st.subheader("🚨 Monitoramento de Risco (BI)")
-    limite_atual = db.obter_limite_alerta()
-
-    novo_limite = st.number_input(
-        "Gatilho para Alerta de Saldo Crítico (R$):", 
-        value=limite_atual, 
-        help="O sistema destacará em vermelho se o saldo global ficar abaixo deste valor."
-    )
-
-    if st.button("Salvar Regra de Segurança", use_container_width=True):
-        ok, msg = db.salvar_limite_alerta(novo_limite)
-        if ok:
-            st.success(f"✅ Regra atualizada: Alerta em R$ {novo_limite:,.2f}")
-        else:
-            st.error(msg)
-
-# [admin_gestao.py][Edição Marvel Prime v5.0][2026-02-26 17:15]
+# [admin_gestao.py][Edição Marvel Prime c/ Comunicação Oficial v6.0][2026-02-26]
