@@ -1,141 +1,164 @@
 import streamlit as st
-import database as db  # Conector unificado
+import database as db
 import pandas as pd
 import time
+from datetime import date
 
 def renderizar_aba_gestao(atl_data, vis_data):
-    """
-    Módulo de Controle de Acessos e Membros da Equipe.
-    Garante que a diretoria tenha as permissões (roles) corretas.
-    """
-    st.markdown("### 👥 Gestão de Atletas e Diretoria")
+    """Módulo de RH v12.5: Formato de Data dd/mm/aa e Blindagem de Gravação"""
+    st.markdown("### 👥 Gestão Integrada de Equipe")
 
-    col_atl, col_vis = st.columns(2)
-
-    with col_atl:
-        st.markdown("#### 🏃‍♂️ Base de Atletas")
-        if atl_data:
-            df_atl = pd.DataFrame(atl_data)
-            # Exibição executiva focada em saldo e bolsa
-            st.dataframe(
-                df_atl[['nome', 'cpf', 'bolsa', 'saldo']], 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "bolsa": st.column_config.NumberColumn("Bolsa (R$)", format="%.2f"),
-                    "saldo": st.column_config.NumberColumn("Saldo (R$)", format="%.2f")
-                }
-            )
-        else:
-            st.info("Nenhum atleta cadastrado.")
-
-    with col_vis:
-        st.markdown("#### 👔 Acessos da Diretoria")
-        if vis_data:
-            df_vis = pd.DataFrame(vis_data)
-
-            # REPARO MARVEL: Blindagem contra erro de coluna 'role' inexistente
-            if 'role' not in df_vis.columns:
-                df_vis['role'] = 'admin'  # Define um padrão seguro para evitar crash
-
-            st.dataframe(
-                df_vis[['nome', 'email', 'role']], 
-                use_container_width=True, 
-                hide_index=True
-            )
-        else:
-            st.info("Nenhum acesso de diretoria configurado.")
-
+    modo = st.radio(
+        "Modo de Operação:", 
+        ["📊 Visão Geral", "➕ Novo Cadastro", "✏️ Editar Membro"], 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
     st.divider()
 
-    # --- ÁREA DE EDIÇÃO DE PERMISSÕES ---
-    st.markdown("#### 🛠️ Atualizar Permissões de Acesso")
-    if vis_data:
-        usuarios_lista = [f"{u['nome']} ({u['email']})" for u in vis_data]
-        escolha = st.selectbox("Selecione o membro para editar:", ["Selecione..."] + usuarios_lista)
+    # --- MODO 1: VISÃO GERAL ---
+    if modo == "📊 Visão Geral":
+        col_atl, col_vis = st.columns(2)
+        with col_atl:
+            st.markdown("#### 🏃‍♂️ Base de Atletas")
+            if atl_data:
+                df_atl = pd.DataFrame(atl_data)
+                # Formata a data para dd/mm/yy na visualização da tabela
+                if 'data_nascimento' in df_atl.columns:
+                    df_atl['data_nascimento'] = pd.to_datetime(df_atl['data_nascimento']).dt.strftime('%d/%m/%y')
 
-        if escolha != "Selecione...":
-            email_alvo = escolha.split('(')[1].replace(')', '')
-            usuario_atual = next(u for u in vis_data if u['email'] == email_alvo)
+                st.dataframe(
+                    df_atl[['nome', 'cpf', 'bolsa', 'saldo']], 
+                    use_container_width=True, hide_index=True,
+                    column_config={
+                        "bolsa": st.column_config.NumberColumn("Bolsa (R$)", format="%.2f"),
+                        "saldo": st.column_config.NumberColumn("Saldo (R$)", format="%.2f")
+                    }
+                )
+            else: st.info("Nenhum atleta cadastrado.")
 
-            with st.form("form_edit_permissao"):
-                novo_nome = st.text_input("Nome:", value=usuario_atual['nome'])
-                novo_email = st.text_input("E-mail:", value=usuario_atual['email'])
-                nova_role = st.selectbox("Role (Nível de Acesso):", ["admin", "viewer", "auditor"], 
-                                         index=["admin", "viewer", "auditor"].index(usuario_atual.get('role', 'admin')))
+        with col_vis:
+            st.markdown("#### 👔 Base da Diretoria / Visitantes")
+            if vis_data:
+                df_vis = pd.DataFrame(vis_data)
+                if 'role' not in df_vis.columns: df_vis['role'] = 'viewer'
+                st.dataframe(df_vis[['nome', 'email', 'role']], use_container_width=True, hide_index=True)
+            else: st.info("Nenhum visitante configurado.")
 
-                if st.form_submit_button("💾 Salvar Alterações"):
-                    ok, msg = db.atualizar_usuario(email_alvo, novo_nome, novo_email, nova_role)
-                    if ok:
-                        st.success("✅ Acesso atualizado com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(f"Erro ao atualizar: {msg}")
+    # --- MODO 2: NOVO CADASTRO ---
+    elif modo == "➕ Novo Cadastro":
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 🏃‍♂️ Cadastrar Atleta")
+            with st.form("form_novo_atleta", clear_on_submit=True):
+                n_nome = st.text_input("Nome Completo*")
+                n_cpf = st.text_input("CPF* (Apenas números)", max_chars=14)
+                n_bolsa = st.number_input("Valor da Bolsa Mensal (R$)*", min_value=0.0, step=50.0)
+
+                # REPARO MARVEL: Formato DD/MM/YY na tela
+                n_nasc = st.date_input("Data de Nascimento", format="DD/MM/YY", min_value=date(1950, 1, 1), max_value=date.today())
+
+                n_sexo = st.selectbox("Sexo", ["M", "F"])
+                n_email = st.text_input("E-mail do Atleta")
+                n_senha = st.text_input("Senha de Acesso", value="atleta123", type="password")
+
+                if st.form_submit_button("🚀 Salvar Novo Atleta", use_container_width=True, type="primary"):
+                    if n_nome and n_cpf:
+                        # Limpa CPF e converte data para ISO (YYYY-MM-DD) para o Banco
+                        cpf_limpo = n_cpf.replace(".", "").replace("-", "")
+                        dados_atl = {
+                            "nome": n_nome, "cpf": cpf_limpo, "bolsa": n_bolsa, 
+                            "data_nascimento": n_nasc.isoformat(), 
+                            "sexo": n_sexo, "email": n_email, "senha": n_senha, "saldo": n_bolsa
+                        }
+                        ok, msg = db.upsert_atleta(dados_atl)
+                        if ok: st.success(f"Atleta {n_nome} cadastrado!"); time.sleep(1.5); st.rerun()
+                        else: st.error(f"Erro: {msg}")
+                    else: st.warning("Nome e CPF são obrigatórios!")
+
+        with col2:
+            st.markdown("#### 👔 Cadastrar Diretoria / Visitante")
+            with st.form("form_novo_visitante", clear_on_submit=True):
+                v_nome = st.text_input("Nome Completo*")
+                v_email = st.text_input("E-mail* (Usado para login)")
+                v_whats = st.text_input("WhatsApp")
+                v_role = st.selectbox("Nível de Acesso", ["viewer", "auditor", "admin"])
+                v_senha = st.text_input("Senha de Acesso*", value="diretoria123", type="password")
+                if st.form_submit_button("🚀 Salvar Novo Visitante", use_container_width=True, type="primary"):
+                    if v_nome and v_email and v_senha:
+                        dados_vis = {"nome": v_nome, "email": v_email, "whatsapp": v_whats, "role": v_role, "senha": v_senha}
+                        ok, msg = db.upsert_visitante(dados_vis)
+                        if ok: st.success(f"Membro {v_nome} cadastrado!"); time.sleep(1.5); st.rerun()
+                        else: st.error(msg)
+                    else: st.warning("Nome, E-mail e Senha são obrigatórios!")
+
+    # --- MODO 3: EDITAR MEMBRO ---
+    elif modo == "✏️ Editar Membro":
+        tipo_edit = st.selectbox("Quem você deseja editar?", ["🏃‍♂️ Atleta", "👔 Diretoria / Visitante"])
+        if "Atleta" in tipo_edit:
+            if atl_data:
+                atl_map = {f"{a['nome']} (CPF: {a['cpf']})": a for a in atl_data}
+                escolha = st.selectbox("Selecione o Atleta:", ["Selecione..."] + list(atl_map.keys()))
+                if escolha != "Selecione...":
+                    atleta = atl_map[escolha]
+                    with st.form("form_edit_atleta"):
+                        e_nome = st.text_input("Nome", value=atleta.get('nome', ''))
+                        e_bolsa = st.number_input("Valor da Bolsa (R$)", value=float(atleta.get('bolsa', 0.0)))
+                        e_saldo = st.number_input("Ajuste Manual de Saldo (R$)", value=float(atleta.get('saldo', 0.0)))
+
+                        # Data na Edição com formato correto
+                        data_v = pd.to_datetime(atleta.get('data_nascimento', date.today())).date()
+                        e_nasc = st.date_input("Data de Nascimento", value=data_v, format="DD/MM/YY")
+
+                        e_email = st.text_input("E-mail", value=atleta.get('email', ''))
+                        e_senha = st.text_input("Redefinir Senha", value=atleta.get('senha', ''), type="password")
+                        if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
+                            dados_atl = atleta.copy()
+                            dados_atl.update({"nome": e_nome, "bolsa": e_bolsa, "saldo": e_saldo, "data_nascimento": e_nasc.isoformat(), "email": e_email, "senha": e_senha})
+                            ok, msg = db.upsert_atleta(dados_atl)
+                            if ok: st.success("Perfil atualizado!"); time.sleep(1); st.rerun()
+                            else: st.error(msg)
+            else: st.info("Nenhum atleta para editar.")
+        else:
+            if vis_data:
+                vis_map = {f"{v['nome']} ({v.get('email', 'S/ Email')})": v for v in vis_data}
+                escolha = st.selectbox("Selecione o Membro:", ["Selecione..."] + list(vis_map.keys()))
+                if escolha != "Selecione...":
+                    visitante = vis_map[escolha]
+                    with st.form("form_edit_visitante"):
+                        e_nome = st.text_input("Nome", value=visitante.get('nome', ''))
+                        e_email = st.text_input("E-mail", value=visitante.get('email', ''))
+                        e_whats = st.text_input("WhatsApp", value=visitante.get('whatsapp', ''))
+                        papel_atual = visitante.get('role', 'viewer')
+                        idx_role = ["viewer", "auditor", "admin"].index(papel_atual) if papel_atual in ["viewer", "auditor", "admin"] else 0
+                        e_role = st.selectbox("Nível de Acesso", ["viewer", "auditor", "admin"], index=idx_role)
+                        e_senha = st.text_input("Redefinir Senha", value=visitante.get('senha', ''), type="password")
+                        if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
+                            dados_vis = visitante.copy(); dados_vis.update({"nome": e_nome, "email": e_email, "whatsapp": e_whats, "role": e_role, "senha": e_senha})
+                            ok, msg = db.upsert_visitante(dados_vis)
+                            if ok: st.success("Perfil atualizado!"); time.sleep(1); st.rerun()
+                            else: st.error(msg)
+            else: st.info("Nenhum membro para editar.")
 
 def renderizar_aba_configuracoes():
-    """
-    Centro de Comando Prime: Identidade Visual, Risco Financeiro e Comunicação.
-    """
-    st.markdown("### ⚙️ Painel de Governança Integrada")
-
+    """Painel de Governança Operacional"""
+    st.markdown("### ⚙️ Painel de Governança Operacional")
     col1, col2 = st.columns(2)
-
-    # 1. GESTÃO DE RISCO FINANCEIRO (Lado Esquerdo)
     with col1:
         st.subheader("🚨 Risco Financeiro (BI)")
         limite_atual = db.obter_limite_alerta()
-
-        novo_limite = st.number_input(
-            "Gatilho para Alerta de Saldo Crítico (R$):", 
-            value=limite_atual, 
-            help="O sistema destacará em vermelho se o saldo global ficar abaixo deste valor."
-        )
-
+        novo_limite = st.number_input("Gatilho de Saldo Crítico (R$):", value=limite_atual)
         if st.button("💾 Salvar Regra de Segurança", use_container_width=True):
             ok, msg = db.salvar_limite_alerta(novo_limite)
-            if ok:
-                st.success(f"✅ Regra atualizada: Alerta em R$ {novo_limite:,.2f}")
-            else:
-                st.error(msg)
-
-    # 2. GESTÃO DE COMUNICAÇÃO (Lado Direito)
+            if ok: st.success(f"✅ Regra atualizada: R$ {novo_limite:,.2f}")
+            else: st.error(msg)
     with col2:
         st.subheader("📧 Comunicação Oficial")
         email_atual = db.obter_email_admin()
-
-        novo_email = st.text_input(
-            "E-mail Padrão da Diretoria:", 
-            value=email_atual,
-            help="Este e-mail será o destinatário padrão na hora de exportar os dashboards de BI."
-        )
-
+        novo_email = st.text_input("E-mail Padrão da Diretoria:", value=email_atual)
         if st.button("💾 Salvar Destinatário", use_container_width=True):
             ok, msg = db.salvar_email_admin(novo_email)
-            if ok:
-                st.success("✅ E-mail oficial atualizado!")
-            else:
-                st.error(msg)
+            if ok: st.success("✅ E-mail oficial atualizado!")
+            else: st.error(msg)
 
-    st.divider()
-
-    # 3. GESTÃO DE IDENTIDADE VISUAL
-    st.subheader("🖼️ Identidade Visual (Fundo do Sistema)")
-    st.info("Suba aqui o arquivo da quadra para que o sistema carregue-o automaticamente nos temas visuais.")
-
-    arquivo_bg = st.file_uploader("Upload do arquivo .png ou .jpg:", type=['png', 'jpg', 'jpeg'])
-
-    if st.button("💾 Gravar Identidade no Banco de Dados", use_container_width=True):
-        if arquivo_bg:
-            with st.spinner("Sincronizando com o Supabase..."):
-                ok, msg = db.salvar_imagem_fundo_db(arquivo_bg.getvalue())
-                if ok:
-                    st.success(msg)
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error(msg)
-        else:
-            st.warning("Selecione um arquivo de imagem primeiro.")
-
-# [admin_gestao.py][Edição Marvel Prime c/ Comunicação Oficial v6.0][2026-02-26]
+# [admin_gestao.py][Operacional Stealth Blindado v12.5][2026-02-26]

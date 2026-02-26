@@ -1,98 +1,54 @@
 import streamlit as st
-import database as db # Mantemos o alias para compatibilidade com outros arquivos
+
+# 1. CONFIGURAÇÃO DA PÁGINA (A PROTEÇÃO DO MENU LATERAL)
+# Esta deve ser sempre a PRIMEIRA linha de código do Streamlit no arquivo.
+st.set_page_config(
+    page_title="NotaFácil Prime | NSG",
+    page_icon="🏀",
+    layout="wide",
+    initial_sidebar_state="expanded" # 🔓 ISSO GARANTE QUE O MENU SEMPRE APAREÇA!
+)
+
+# 2. Importação dos Módulos Internos
 import styles
 import portal_lancamento as portal
 import admin
 
-# ==========================================
-# 1. SETUP INICIAL DE PLATAFORMA
-# ==========================================
-st.set_page_config(
-    page_title="NotaFácil Prime", 
-    page_icon="🏀", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+def main():
+    # 3. Inicialização de Variáveis de Sessão (State)
+    if 'usuario_logado' not in st.session_state:
+        st.session_state.usuario_logado = None
+    if 'tela' not in st.session_state:
+        st.session_state.tela = "lancamento"
+    if 'res_data' not in st.session_state:
+        st.session_state.res_data = {}
+    if 'mostra_cadastro' not in st.session_state:
+        st.session_state.mostra_cadastro = False
 
-# ==========================================
-# 2. INICIALIZAÇÃO DE SESSÕES (CACHE BI)
-# ==========================================
-# Garante que as variáveis de controle existam na memória do navegador
-if 'usuario_logado' not in st.session_state:
-    st.session_state['usuario_logado'] = None
+    # 4. Aplicação do Visual (Modo Operacional Stealth)
+    styles.aplicar_estilos_globais()
 
-if 'mostra_cadastro' not in st.session_state:
-    st.session_state['mostra_cadastro'] = False
+    # 5. CONSTRUÇÃO DO MENU LATERAL (Sidebar)
+    st.sidebar.markdown("<h2 style='text-align: center;'>🏀 NotaFácil Prime</h2>", unsafe_allow_html=True)
 
-# Recupera o tema visual preferido (Inicia no Escuro por padrão)
-if 'tema_visual' not in st.session_state:
-    st.session_state['tema_visual'] = "🌑 Escuro"
-
-# ==========================================
-# 3. APLICAÇÃO DO MOTOR VISUAL BLINDADO
-# ==========================================
-# Chama o styles.py que agora processa o fundo vindo do banco de dados
-styles.aplicar_estilos_globais(st.session_state['tema_visual'])
-
-# ==========================================
-# 4. MENU LATERAL DE GOVERNANÇA
-# ==========================================
-with st.sidebar:
-    st.image("logo-notaFacil.png", use_container_width=True)
-    st.divider()
-
-    st.caption("Navegação Estratégica")
-    navegacao = st.radio(
-        "Selecione o Módulo", 
-        ["🏃 Lançamento", "🏛️ Central de Governança"],
-        label_visibility="collapsed"
+    # Este é o seletor que controla o que aparece na tela direita
+    destino = st.sidebar.radio(
+        "Navegação Estratégica:",
+        ["🏃 Lançamento de NF", "🏛️ Central de Governança"],
+        label_visibility="visible"
     )
 
-    st.divider()
+    st.sidebar.divider()
 
-    # Seletor de Temas (Integrado com db_config para ler o fundo da quadra)
-    st.caption("🎨 Personalização Visual")
-    opcoes_temas = ["🌑 Escuro", "☀️ Claro", "🏢 Cinza (Prime)", "🏀 Fundo Imagem"]
+    # 6. ROTEADOR DE TELAS
+    if destino == "🏃 Lançamento de NF":
+        # Tela para Atletas e Visitantes
+        portal.renderizar_portal()
+    else:
+        # Tela da Diretoria (Com o campo de senha que configuramos)
+        admin.exibir_sala_de_guerra()
 
-    try: 
-        idx_atual = opcoes_temas.index(st.session_state['tema_visual'])
-    except: 
-        idx_atual = 0
+if __name__ == "__main__":
+    main()
 
-    tema_selecionado = st.selectbox(
-        "Escolha o Tema", 
-        opcoes_temas,
-        index=idx_atual,
-        label_visibility="collapsed"
-    )
-
-    # Lógica de atualização imediata de UI
-    if tema_selecionado != st.session_state['tema_visual']:
-        st.session_state['tema_visual'] = tema_selecionado
-        st.rerun()
-
-# ==========================================
-# 5. ROTEADOR DE MÓDULOS (CORE)
-# ==========================================
-if navegacao == "🏃 Lançamento":
-    # Módulo de entrada de dados para atletas e visitantes
-    portal.renderizar_portal()
-
-elif navegacao == "🏛️ Central de Governança":
-    # Módulo de Auditoria, BI e Gestão de Equipe
-    admin.exibir_sala_de_guerra()
-
-# ==========================================
-# 6. RODAPÉ DE VERSÃO (BI AUDIT)
-# ==========================================
-# Recupera as informações de copyright do banco modularizado
-cfg_rodape = db.obter_config_rodape()
-st.sidebar.markdown(f"""
----
-<div style='text-align: center; color: #777; font-size: 10px;'>
-    {cfg_rodape['copyright']} | {cfg_rodape['versao']}<br>
-    Governança Inteligente
-</div>
-""", unsafe_allow_html=True)
-
-# [main.py][Unificador de Módulos Database][2026-02-26 16:45][v1.5]
+# [main.py][Sidebar Persistente v6.5][2026-02-26]
