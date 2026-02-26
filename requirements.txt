@@ -1,6 +1,6 @@
 streamlit
 pandas
 supabase
+plotly
 requests
-plotly
-plotly
+xlsxwriter
