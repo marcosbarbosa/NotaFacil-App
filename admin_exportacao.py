@@ -15,10 +15,21 @@ def _converter_mes_para_int(mes_input):
     return mapa.get(mes_input, date.today().month)
 
 def gerar_html_email_bi(df_f, mes, ano, st_f):
-    """Gera HTML com Semaforização Financeira (Tempo + Volume)"""
-    total_valor = df_f['valor'].sum()
+    """Gera HTML com Painel Financeiro Macro (Bolsas + Saldos + Processado)"""
+
+    # 1. Cálculos Micro (Sobre as Notas filtradas)
+    total_valor_notas = df_f['valor'].sum()
     qtd_notas = len(df_f)
 
+    # 2. Cálculos Macro (Sobre os Atletas envolvidos - Sem duplicidade)
+    resumo_atl = df_f.groupby('Atleta (Bolsa)').agg({
+        'Valor Bolsa': 'first', 'Saldo Atual': 'first', 'NFs Entregues Acumulado': 'first'
+    }).reset_index()
+
+    macro_total_bolsas = resumo_atl['Valor Bolsa'].sum()
+    macro_total_saldo = resumo_atl['Saldo Atual'].sum()
+
+    # 3. Preparação das Variáveis de Tempo
     mes_idx = _converter_mes_para_int(mes)
     ano_int = int(ano)
     ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
@@ -27,16 +38,17 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
 
     is_reta_final = (dias_restantes <= 7 and dias_restantes >= 0 and hoje.month == mes_idx and hoje.year == ano_int)
 
-    # LÓGICA DE UX PRIME: Etiqueta financeira dinâmica baseada no filtro escolhido
+    # 4. UX PRIME: Etiquetas Dinâmicas
     if "Pendente" in st_f:
-        label_total = "Total Pendente de Aprovação:"
+        label_total = "Total Pendente (NFs):"
     elif "Aprovada" in st_f:
         label_total = "Total Já Aprovado:"
     elif "Reprovada" in st_f:
-        label_total = "Total Reprovado/Negado:"
+        label_total = "Total Reprovado:"
     else:
-        label_total = "Total Geral Processado:"
+        label_total = "Total Processado (NFs):"
 
+    # 5. Construção do Corpo do E-mail (Novo Painel Quádruplo)
     html = f"""
     <div style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">
         <div style="background-color: #0056b3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
@@ -45,18 +57,32 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
         </div>
 
         <div style="background-color: #f8f9fa; padding: 15px; border-bottom: 2px solid #ddd; margin-bottom: 20px;">
-            <table width="100%"><tr>
-                <td><strong>Volume Auditado:</strong> {qtd_notas} NFs</td>
-                <td align="right"><strong>{label_total}</strong> R$ {total_valor:,.2f}</td>
-            </tr></table>
+            <table width="100%" cellspacing="5">
+                <tr>
+                    <td style="background: #e9ecef; padding: 10px; border-radius: 5px;">
+                        <span style="font-size: 11px; color: #666; text-transform: uppercase;">Volume Auditado</span><br>
+                        <strong>{qtd_notas} NFs</strong>
+                    </td>
+                    <td style="background: #e9ecef; padding: 10px; border-radius: 5px;" align="right">
+                        <span style="font-size: 11px; color: #666; text-transform: uppercase;">{label_total}</span><br>
+                        <strong style="color: #0056b3;">R$ {total_valor_notas:,.2f}</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="background: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeeba;">
+                        <span style="font-size: 11px; color: #856404; text-transform: uppercase;">Total de Bolsas (Equipe)</span><br>
+                        <strong style="color: #856404;">R$ {macro_total_bolsas:,.2f}</strong>
+                    </td>
+                    <td style="background: #d4edda; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb;" align="right">
+                        <span style="font-size: 11px; color: #155724; text-transform: uppercase;">Saldo Restante Global</span><br>
+                        <strong style="color: #155724;">R$ {macro_total_saldo:,.2f}</strong>
+                    </td>
+                </tr>
+            </table>
         </div>
 
         <h3 style="color: #333;">🚦 Status de Metas por Atleta</h3>
     """
-
-    resumo_atl = df_f.groupby('Atleta (Bolsa)').agg({
-        'Valor Bolsa': 'first', 'Saldo Atual': 'first', 'NFs Entregues Acumulado': 'first'
-    }).reset_index()
 
     html += "<table width='100%' cellspacing='0' cellpadding='8' style='border: 1px solid #eee;'>"
 
@@ -120,7 +146,7 @@ def gerar_html_email_bi(df_f, mes, ano, st_f):
     return html
 
 def gerar_excel_bi(df_f, mes, ano, st_f):
-    """Gera Excel com Gráfico Inteligente (Sem zeros ocultos) e Ordenação Prime"""
+    """Gera Excel com Painel Macro e Ordenação Prime"""
     df_export = df_f.copy()
 
     try: df_export['Data/Hora Lançamento'] = pd.to_datetime(df_export['created_at']).dt.strftime('%d/%m/%Y %H:%M')
@@ -135,10 +161,8 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
 
     df_export['Atleta'] = df_export['Atleta'].apply(lambda x: str(x).split('(')[0].strip() if pd.notnull(x) else x)
 
-    # ORDENAÇÃO MELHORES PRÁTICAS: Agrupa por Atleta, depois pela data da NF (mais recente primeiro)
     df_export = df_export.sort_values(by=['Atleta', 'Data/Hora Lançamento'], ascending=[True, False])
 
-    # NOVA ORDEM SOLICITADA (Contexto -> Financeiro -> Detalhes da Nota)
     ordem = ['Atleta', 'CPF do Atleta', 'Bolsa Total', 'NFs Entregues', 'Saldo Restante', 'Data/Hora Lançamento', 'Data do Recibo', 'Valor Desta NF', 'Status', 'Lançado por']
     df_export = df_export[[c for c in ordem if c in df_export.columns]]
 
@@ -158,13 +182,24 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
             w = 18 if 'R$' not in col else 15
             ws_base.set_column(i, i, w, f_money if any(x in col for x in ['Valor', 'Saldo', 'Bolsa', 'Entregues']) else None)
 
+        # CÁLCULOS MACRO PARA O EXCEL
         resumo = df_export.groupby('Atleta').agg({
             'Bolsa Total': 'first', 'NFs Entregues': 'first', 'Saldo Restante': 'first'
         }).reset_index()
 
+        # Inserção do Resumo Macro no Excel
+        f_macro_label = wb.add_format({'bold': True, 'font_color': '#555'})
+        f_macro_val = wb.add_format({'bold': True, 'num_format': 'R$ #,##0.00', 'font_size': 12})
+
+        ws_dash.write('B6', 'Total de Bolsas (Global):', f_macro_label)
+        ws_dash.write('C6', resumo['Bolsa Total'].sum(), f_macro_val)
+
+        ws_dash.write('E6', 'Saldo Restante (Global):', f_macro_label)
+        ws_dash.write('F6', resumo['Saldo Restante'].sum(), f_macro_val)
+
+        # Lógica de Semaforização e Gráfico
         mes_idx = _converter_mes_para_int(mes)
         ano_int = int(ano)
-
         ultimo_dia = calendar.monthrange(ano_int, mes_idx)[1]
         hoje = date.today()
         dias_restantes = ultimo_dia - hoje.day
@@ -184,13 +219,15 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
             elif perc >= 0.50: resumo.at[idx, 'Saldo_Amarelo'] = saldo
             else: resumo.at[idx, 'Saldo_Azul'] = saldo
 
-        ws_dash.write('B2', 'ATLETA', f_head)
-        ws_dash.write('C2', 'ENTREGUE (VERDE)', f_head)
-        ws_dash.write('D2', 'SALDO (AZUL)', f_head)
-        ws_dash.write('E2', 'SALDO (AMARELO)', f_head)
-        ws_dash.write('F2', 'SALDO (VERMELHO)', f_head)
+        # Tabela Detalhada (movida para linha 9 por causa do resumo macro)
+        start_row = 9
+        ws_dash.write(f'B{start_row}', 'ATLETA', f_head)
+        ws_dash.write(f'C{start_row}', 'ENTREGUE (VERDE)', f_head)
+        ws_dash.write(f'D{start_row}', 'SALDO (AZUL)', f_head)
+        ws_dash.write(f'E{start_row}', 'SALDO (AMARELO)', f_head)
+        ws_dash.write(f'F{start_row}', 'SALDO (VERMELHO)', f_head)
 
-        row = 2
+        row = start_row
         for _, r in resumo.iterrows():
             ws_dash.write(row, 1, r['Atleta'], f_txt)
             ws_dash.write(row, 2, r['NFs Entregues'], f_money)
@@ -201,33 +238,32 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
 
         chart = wb.add_chart({'type': 'bar', 'subtype': 'stacked'})
 
-        # O TRUQUE DO ZERO: 'num_format': 'R$ #,##0;;' esconde valores zerados no gráfico
-
+        # Atualizando referências do gráfico para a nova posição (linha 9)
         chart.add_series({
             'name': 'Já Recebido',
-            'categories': ['📊 Dashboard Prime', 2, 1, row-1, 1],
-            'values':     ['📊 Dashboard Prime', 2, 2, row-1, 2],
+            'categories': ['📊 Dashboard Prime', start_row, 1, row-1, 1],
+            'values':     ['📊 Dashboard Prime', start_row, 2, row-1, 2],
             'fill':       {'color': '#28a745'},
             'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
         })
 
         chart.add_series({
             'name': 'Saldo (Em dia)',
-            'values':     ['📊 Dashboard Prime', 2, 3, row-1, 3],
+            'values':     ['📊 Dashboard Prime', start_row, 3, row-1, 3],
             'fill':       {'color': '#0056b3'},
             'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
         })
 
         chart.add_series({
             'name': 'Saldo (Atenção 50-60%)',
-            'values':     ['📊 Dashboard Prime', 2, 4, row-1, 4],
+            'values':     ['📊 Dashboard Prime', start_row, 4, row-1, 4],
             'fill':       {'color': '#ffc107'},
             'data_labels': {'value': True, 'font_color': 'black', 'num_format': 'R$ #,##0;;'}
         })
 
         chart.add_series({
             'name': 'Saldo (Crítico/Reta Final)',
-            'values':     ['📊 Dashboard Prime', 2, 5, row-1, 5],
+            'values':     ['📊 Dashboard Prime', start_row, 5, row-1, 5],
             'fill':       {'color': '#dc3545'},
             'data_labels': {'value': True, 'font_color': 'white', 'num_format': 'R$ #,##0;;'}
         })
@@ -236,7 +272,7 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
         chart.set_size({'width': 700, 'height': 450})
         chart.set_legend({'position': 'bottom'})
 
-        ws_dash.insert_chart('H2', chart)
+        ws_dash.insert_chart(f'H{start_row}', chart)
 
         cfg = db.obter_config_rodape()
         ws_dash.write(row+2, 1, f"Relatório gerado em: {date.today().strftime('%d/%m/%Y')}", wb.add_format({'italic': True}))
@@ -244,4 +280,4 @@ def gerar_excel_bi(df_f, mes, ano, st_f):
 
     return buffer
 
-# [admin_exportacao.py][Ordenação Base e Remoção de Zeros no Gráfico][2026-02-26 14:45][v3.2][201 linhas]
+# [admin_exportacao.py][Painel Macro Bolsas/Saldos + Gráfico Ajustado][2026-02-26 15:30][v3.4][245 linhas]
