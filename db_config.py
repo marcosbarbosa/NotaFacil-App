@@ -39,6 +39,14 @@ def obter_senha_admin():
         return res.data[0]['valor'] if res.data else "admin"
     except: return "admin"
 
+def salvar_limite_alerta(novo_limite):
+    """Salva o novo limite de alerta no banco de dados"""
+    try:
+        supabase.table('configuracoes').upsert({'chave': 'limite_alerta', 'valor': str(novo_limite)}).execute()
+        return True, "✅ Limite de alerta atualizado!"
+    except Exception as e:
+        return False, str(e)
+
 def obter_email_admin():
     """Busca o e-mail do administrador para relatórios e recuperação de senha"""
     try:
