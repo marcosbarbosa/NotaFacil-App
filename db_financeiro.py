@@ -53,5 +53,14 @@ def registrar_log_exportacao(admin_nome, destinatario, filtros, qtd):
     except: 
         pass
 
+        def obter_ultimo_email_exportacao():
+            """Busca o último e-mail utilizado nos disparos de relatórios para manter o histórico"""
+            try:
+                # Puxa apenas o destinatário do registro mais recente
+                res = supabase.table('logs_exportacao').select('destinatario').order('created_at', desc=True).limit(1).execute()
+                return res.data[0]['destinatario'] if res.data else "" # Se não achar, retorna vazio
+            except:
+                return ""
+
 # [db_financeiro.py][Motor Transacional Blindado v10.0][2026-02-27]
 # Total de Linhas de Código: 48

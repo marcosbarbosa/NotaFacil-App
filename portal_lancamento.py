@@ -6,17 +6,17 @@ import servicos_email as email_svc
 
 # --- HELPERS (Regras de Negócio) ---
 def _gerar_senha_padrao(email, nome):
-    """Gera a senha padrão do usuário baseada no e-mail ou nome"""
+    """Gera a senha padrão com blindagem de strings (remove espaços ocultos)"""
     if email and "@" in email:
-        prefixo = email.split("@")[0]
+        prefixo = email.strip().split("@")[0]
     else:
-        prefixo = nome.split(" ")[0]
+        prefixo = nome.strip().split(" ")[0]
     base = prefixo[-3:] if len(prefixo) >= 3 else prefixo.ljust(3, 'x')
     return base.capitalize() + "123"
 
 # --- MÓDULOS DE TELA (Views) ---
 def _exibir_tela_login(atl_raw, vis_raw):
-    """Renderiza a tela de autenticação e registro"""
+    """Renderiza a tela de autenticação e registro blindada"""
     st.title("🔐 Acesso ao Sistema")
 
     if st.session_state.get('mostra_cadastro', False):
@@ -25,7 +25,6 @@ def _exibir_tela_login(atl_raw, vis_raw):
             nm = st.text_input("Seu Nome Completo*")
             em = st.text_input("Seu E-mail*")
 
-            # 📞 MÁSCARA ORIENTADA: Placeholder para o WhatsApp
             wh = st.text_input(
                 "Seu WhatsApp (DDD + Número)*", 
                 placeholder="(11) 99999-9999", 
@@ -35,17 +34,17 @@ def _exibir_tela_login(atl_raw, vis_raw):
             submit = st.form_submit_button("Criar Acesso e Entrar", use_container_width=True)
 
             if submit:
-                if nm and em:
+                if nm.strip() and "@" in em:
                     senha_nova = _gerar_senha_padrao(em, nm)
-                    # Resolve o erro de upsert_visitante
-                    v_id = db.upsert_visitante({"nome": nm, "email": em, "whatsapp": wh, "senha": senha_nova, "role": "viewer"})
-                    st.session_state.usuario_logado = {"tipo": "visitante", "id": v_id, "nome": nm}
+                    v_id = db.upsert_visitante({"nome": nm.strip(), "email": em.strip(), "whatsapp": wh.strip(), "senha": senha_nova, "role": "viewer"})
+
+                    st.session_state.usuario_logado = {"tipo": "visitante", "id": v_id, "nome": nm.strip()}
                     st.success(f"Cadastro realizado! Sua senha automática é: {senha_nova}")
                     st.session_state.mostra_cadastro = False
                     time.sleep(4)
                     st.rerun()
                 else:
-                    st.error("Nome e E-mail são obrigatórios!")
+                    st.error("⚠️ Nome e um E-mail válido (com @) são obrigatórios!")
 
         if st.button("⬅️ Voltar para o Login", use_container_width=True):
             st.session_state.mostra_cadastro = False
@@ -73,7 +72,7 @@ def _exibir_tela_login(atl_raw, vis_raw):
                         senha_dinamica = _gerar_senha_padrao(email_user, user_obj['nome'])
                         senha_real = senha_dinamica if (not senha_db or senha_db == 'mudar123') else senha_db
 
-                        if senha_digitada == senha_real:
+                        if senha_digitada.strip() == senha_real.strip():
                             tipo = "atleta" if eh_atl else "visitante"
                             chave_id = user_obj.get('cpf') if eh_atl else user_obj.get('id')
                             st.session_state.usuario_logado = {"tipo": tipo, "id": chave_id, "nome": user_obj['nome']}
@@ -83,15 +82,15 @@ def _exibir_tela_login(atl_raw, vis_raw):
                 with c2:
                     if st.button("🔑 Esqueci a Senha", use_container_width=True):
                         email_user = user_obj.get('email', '')
-                        if email_user:
+                        if email_user and "@" in email_user:
                             senha_db = user_obj.get('senha')
-                            senha_dinamica = _gerar_senha_padrao(email_user, user_obj['nome'])
-                            senha_real = senha_dinamica if (not senha_db or senha_db == 'mudar123') else senha_db
+                            senha_real = _gerar_senha_padrao(email_user, user_obj['nome']) if (not senha_db or senha_db == 'mudar123') else senha_db
+
                             with st.spinner("Conectando ao servidor..."):
                                 sucesso, msg = email_svc.recuperar_senha_usuario(email_user, user_obj['nome'], senha_real)
                             if sucesso: st.success(f"Senha enviada para: {email_user}")
                             else: st.error(f"Falha ao enviar: {msg}")
-                        else: st.warning("Usuário sem e-mail cadastrado.")
+                        else: st.warning("⚠️ Usuário sem e-mail cadastrado ou inválido.")
 
         st.divider()
         if st.button("➕ Novo Visitante? Cadastre-se aqui"):
@@ -101,7 +100,7 @@ def _exibir_tela_login(atl_raw, vis_raw):
 def _exibir_tela_sucesso():
     """Renderiza o comprovante com a Tag de BI correta"""
     res = st.session_state.res_data
-    st.success("### ✅ Lançamento Realizado!")
+    st.success("### ✅ Lançamento Registrado no Banco!")
 
     with st.container(border=True):
         st.write(f"**Atleta Beneficiado:** 🏃 {res['atleta_nome']}")
@@ -133,43 +132,46 @@ def _exibir_tela_formulario(atl_raw):
 
         dest = st.selectbox("Para qual Atleta você está lançando?", lista_nomes, index=idx_padrao)
 
-        # CORREÇÃO DE DATA: YYYY de 4 dígitos para evitar erro
         dt_recibo = st.date_input("Data do Recibo/Nota:", format="DD/MM/YYYY")
-
-        val = st.number_input("Valor da Nota (R$)", min_value=0.01, step=10.0, format="%.2f")
+        val = st.number_input("Valor da Nota (R$)", min_value=0.00, step=10.0, format="%.2f")
         ft = st.file_uploader("📸 Anexar Comprovante", type=['jpg', 'png', 'pdf', 'jpeg'])
 
         submit_nf = st.form_submit_button("🚀 ENVIAR PARA AUDITORIA", use_container_width=True)
 
         if submit_nf:
             if not ft: 
-                st.warning("Anexe o comprovante!")
+                st.warning("⚠️ Você precisa anexar o comprovante!")
+            elif val <= 0:
+                st.warning("⚠️ O valor da nota deve ser maior que zero!")
             else:
-                with st.spinner("Registrando lançamento..."):
+                with st.spinner("Gravando no Banco de Dados..."):
                     atl_obj = next(a for a in atl_raw if a['nome'] == dest)
                     v_id = st.session_state.usuario_logado['id'] if st.session_state.usuario_logado['tipo'] == 'visitante' else None
-
-                    # 🚀 FIX DO OPERADOR: Envia o nome de quem está logado (ex: Fernando)
                     operador_nome = st.session_state.usuario_logado['nome']
 
-                    db.salvar_nota_fiscal(
+                    # 🛡️ FIX CRÍTICO: Agora o portal VERIFICA se o banco aceitou a nota!
+                    ok, msg = db.salvar_nota_fiscal(
                         valor=val, 
                         data=dt_recibo, 
                         arquivo=ft, 
                         cpf=atl_obj['cpf'], 
                         v_id=v_id, 
-                        operador_nome=operador_nome # <--- Nome real do operador
+                        operador_nome=operador_nome 
                     )
 
-                    # Recalcula BI para o recibo
-                    dados_up, _, _ = db.carregar_dados_globais()
-                    atl_up = next((a for a in dados_up if a['cpf'] == atl_obj['cpf']), None)
+                    if ok:
+                        # Só mostra a tela verde se gravou de verdade!
+                        dados_up, _, _ = db.carregar_dados_globais()
+                        atl_up = next((a for a in dados_up if a['cpf'] == atl_obj['cpf']), None)
 
-                    if atl_up:
-                        tag = db.calcular_tag_3x3(atl_up['saldo'], atl_up['bolsa'])
-                        st.session_state.res_data = {"valor": val, "saldo": atl_up['saldo'], "atleta_nome": atl_up['nome'], "atleta_tag": tag}
-                        st.session_state.tela = "resumo"
-                        st.rerun()
+                        if atl_up:
+                            tag = db.calcular_tag_3x3(atl_up['saldo'], atl_up['bolsa'])
+                            st.session_state.res_data = {"valor": val, "saldo": atl_up['saldo'], "atleta_nome": atl_up['nome'], "atleta_tag": tag}
+                            st.session_state.tela = "resumo"
+                            st.rerun()
+                    else:
+                        # Mostra o erro exato na tela em vermelho se algo falhar
+                        st.error(f"🚨 Fato impeditivo no Banco de Dados: {msg}")
 
 def renderizar_portal():
     """Roteador do Portal"""
@@ -182,4 +184,5 @@ def renderizar_portal():
         atl_raw, _, _ = db.carregar_dados_globais()
         _exibir_tela_formulario(atl_raw)
 
-# [portal_lancamento.py][Edição Stealth v16.0 - Operator & Date Fix][2026-02-27]
+# [portal_lancamento.py][Validação de Inserção v17.5][2026-02-27]
+# Total de Linhas de Código: 153

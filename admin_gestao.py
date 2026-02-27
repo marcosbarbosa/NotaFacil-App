@@ -5,7 +5,7 @@ import time
 from datetime import date
 
 def renderizar_aba_gestao(atl_data, vis_data):
-    """Módulo de RH v15.0: Gestão de Equipe com Datas e WhatsApp Blindados"""
+    """Módulo de RH v16.0: Gestão de Equipe com Sanitização Máxima"""
     st.markdown("### 👥 Gestão Integrada de Equipe")
 
     # SUB-MENU DE NAVEGAÇÃO INTERNA
@@ -70,17 +70,18 @@ def renderizar_aba_gestao(atl_data, vis_data):
                 n_senha = st.text_input("Senha de Acesso", value="atleta123", type="password")
 
                 if st.form_submit_button("🚀 Salvar Novo Atleta", use_container_width=True, type="primary"):
-                    if n_nome and n_cpf:
-                        cpf_limpo = n_cpf.replace(".", "").replace("-", "")
+                    # 🛡️ BLINDAGEM: Sanitização e Validação de CPF (Exato 11 dígitos)
+                    cpf_limpo = n_cpf.replace(".", "").replace("-", "").strip()
+                    if n_nome.strip() and cpf_limpo.isdigit() and len(cpf_limpo) == 11:
                         dados_atl = {
-                            "nome": n_nome, "cpf": cpf_limpo, "bolsa": n_bolsa, 
+                            "nome": n_nome.strip(), "cpf": cpf_limpo, "bolsa": n_bolsa, 
                             "data_nascimento": n_nasc.strftime('%Y-%m-%d'), 
-                            "sexo": n_sexo, "email": n_email, "senha": n_senha, "saldo": n_bolsa
+                            "sexo": n_sexo, "email": n_email.strip(), "senha": n_senha.strip(), "saldo": n_bolsa
                         }
                         ok, msg = db.upsert_atleta(dados_atl)
-                        if ok: st.success(f"Atleta {n_nome} cadastrado!"); time.sleep(1.5); st.rerun()
+                        if ok: st.success(f"Atleta {n_nome.strip()} cadastrado!"); time.sleep(1.5); st.rerun()
                         else: st.error(f"Erro: {msg}")
-                    else: st.warning("Nome e CPF são obrigatórios!")
+                    else: st.warning("⚠️ Preencha o Nome e insira um CPF válido (11 números)!")
 
         # FORMULÁRIO: NOVO VISITANTE/DIRETOR
         with col2:
@@ -100,12 +101,13 @@ def renderizar_aba_gestao(atl_data, vis_data):
                 v_senha = st.text_input("Senha de Acesso*", value="diretoria123", type="password")
 
                 if st.form_submit_button("🚀 Salvar Novo Visitante", use_container_width=True, type="primary"):
-                    if v_nome and v_email and v_senha:
-                        dados_vis = {"nome": v_nome, "email": v_email, "whatsapp": v_whats, "role": v_role, "senha": v_senha}
+                    # 🛡️ BLINDAGEM: Exige o @ no e-mail e sanitiza os espaços
+                    if v_nome.strip() and "@" in v_email and v_senha.strip():
+                        dados_vis = {"nome": v_nome.strip(), "email": v_email.strip(), "whatsapp": v_whats.strip(), "role": v_role, "senha": v_senha.strip()}
                         ok, msg = db.upsert_visitante(dados_vis) # Chamada unificada
-                        if ok: st.success(f"Membro {v_nome} cadastrado!"); time.sleep(1.5); st.rerun()
+                        if ok: st.success(f"Membro {v_nome.strip()} cadastrado!"); time.sleep(1.5); st.rerun()
                         else: st.error(msg)
-                    else: st.warning("Nome, E-mail e Senha são obrigatórios!")
+                    else: st.warning("⚠️ Nome, Senha e um E-mail válido (com @) são obrigatórios!")
 
     # ==========================================
     # ✏️ MODO 3: EDITAR MEMBRO EXISTENTE
@@ -132,8 +134,8 @@ def renderizar_aba_gestao(atl_data, vis_data):
                         e_senha = st.text_input("Redefinir Senha", value=atleta.get('senha', ''), type="password")
                         if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
                             dados_atl = atleta.copy(); dados_atl.update({
-                                "nome": e_nome, "bolsa": e_bolsa, "saldo": e_saldo, 
-                                "data_nascimento": e_nasc.strftime('%Y-%m-%d'), "email": e_email, "senha": e_senha
+                                "nome": e_nome.strip(), "bolsa": e_bolsa, "saldo": e_saldo, 
+                                "data_nascimento": e_nasc.strftime('%Y-%m-%d'), "email": e_email.strip(), "senha": e_senha.strip()
                             })
                             ok, msg = db.upsert_atleta(dados_atl)
                             if ok: st.success("Perfil atualizado!"); time.sleep(1); st.rerun()
@@ -154,7 +156,7 @@ def renderizar_aba_gestao(atl_data, vis_data):
                         e_role = st.selectbox("Nível de Acesso", ["viewer", "auditor", "admin"], index=idx_role)
                         e_senha = st.text_input("Redefinir Senha", value=visitante.get('senha', ''), type="password")
                         if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
-                            dados_vis = visitante.copy(); dados_vis.update({"nome": e_nome, "email": e_email, "whatsapp": e_whats, "role": e_role, "senha": e_senha})
+                            dados_vis = visitante.copy(); dados_vis.update({"nome": e_nome.strip(), "email": e_email.strip(), "whatsapp": e_whats.strip(), "role": e_role, "senha": e_senha.strip()})
                             ok, msg = db.upsert_visitante(dados_vis)
                             if ok: st.success("Perfil atualizado!"); time.sleep(1); st.rerun()
                             else: st.error(msg)
@@ -177,9 +179,12 @@ def renderizar_aba_configuracoes():
         email_atual = db.obter_email_admin()
         novo_email = st.text_input("E-mail Padrão da Diretoria:", value=email_atual)
         if st.button("💾 SALVAR DESTINATÁRIO", use_container_width=True):
-            ok, msg = db.salvar_email_admin(novo_email)
-            if ok: st.success("✅ E-mail oficial atualizado!")
-            else: st.error(msg)
+            # 🛡️ BLINDAGEM: Não permite salvar um e-mail falso nas configurações
+            if "@" in novo_email:
+                ok, msg = db.salvar_email_admin(novo_email.strip())
+                if ok: st.success("✅ E-mail oficial atualizado!")
+                else: st.error(msg)
+            else: st.warning("⚠️ Insira um e-mail válido com '@'.")
 
-# [admin_gestao.py][Operacional Stealth v15.0 - Final Blindado][2026-02-27]
-# Total de Linhas de Código: 147
+# [admin_gestao.py][Sanitização Nível Vibranium v16.0][2026-02-27]
+# Total de Linhas de Código: 153

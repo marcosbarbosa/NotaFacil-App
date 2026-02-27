@@ -27,7 +27,6 @@ def upsert_visitante(dados):
         res = supabase.table("visitantes").upsert(dados, on_conflict="email").execute()
         return True, "Membro salvo com sucesso!"
     except Exception as e:
-        # INDENTAÇÃO CORRIGIDA: O return agora está dentro do bloco except
         return False, str(e)
 
 # --- MOTOR DE AUDITORIA E GOVERNANÇA ---
@@ -53,7 +52,22 @@ def alterar_status_nota(id_nota, cpf_atleta, valor, novo_status, id_admin=None):
     except Exception as e:
         return False, str(e)
 
-# --- INTELIGÊNCIA BI (TAGS 3X3) ---
+def excluir_nota_fiscal(id_nota, cpf_atleta, valor, status_atual):
+    """Deleta a nota permanentemente e estorna o saldo se ela estava aprovada"""
+    try:
+        # Se a nota estava aprovada, devolve o dinheiro para o saldo do atleta antes de apagar
+        if "Aprovada" in status_atual or status_atual == "Aprovado":
+            res_atl = supabase.table("atletas").select("saldo").eq("cpf", cpf_atleta).execute()
+            if res_atl.data:
+                novo_saldo = res_atl.data[0]['saldo'] + float(valor)
+                supabase.table("atletas").update({"saldo": novo_saldo}).eq("cpf", cpf_atleta).execute()
+
+        supabase.table("lancamentos").delete().eq("id", id_nota).execute()
+        return True, "Nota excluída e sistema atualizado!"
+    except Exception as e:
+        return False, f"Erro ao excluir: {str(e)}"
+
+# --- INTELIGÊNCIA BI (TAGS E HISTÓRICO) ---
 
 def calcular_tag_3x3(saldo, bolsa):
     """
@@ -73,21 +87,14 @@ def calcular_tag_3x3(saldo, bolsa):
     else:
         return "SALDO (AZUL)"    # Saudável
 
-# --- CONFIGURAÇÕES DE GOVERNANÇA ---
-
-def obter_limite_alerta():
-    """Busca o gatilho de BI nas configurações"""
+def obter_ultimo_email_exportacao():
+    """UX Prime: Busca o último e-mail utilizado nos disparos de relatórios para poupar digitação"""
     try:
-        res = supabase.table("configuracoes").select("valor").eq("chave", "limite_alerta").execute()
-        return float(res.data[0]['valor']) if res.data else 500.0
-    except: return 500.0
+        res = supabase.table('logs_exportacao').select('destinatario').order('created_at', desc=True).limit(1).execute()
+        return res.data[0]['destinatario'] if res.data else ""
+    except:
+        return ""
 
-def obter_email_admin():
-    """Busca o e-mail oficial da diretoria para exportação"""
-    try:
-        res = supabase.table("configuracoes").select("valor").eq("chave", "email_diretoria").execute()
-        return res.data[0]['valor'] if res.data else "admin@nsg.com"
-    except: return "admin@nsg.com"
-
-# [database.py][Unificador Prime v6.5][2026-02-27]
-# Total de Linhas de Código: 84
+# Observação: Funções de 'configuracoes' foram limpas daqui pois já estão blindadas no db_config.py 
+# [database.py][Unificador Prime Limpo v7.5][2026-02-27]
+# Total de Linhas de Código: 83
