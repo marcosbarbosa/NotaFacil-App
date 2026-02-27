@@ -4,4 +4,3 @@ supabase
 plotly
 requests
 xlsxwriter
-replit

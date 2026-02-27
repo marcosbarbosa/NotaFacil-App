@@ -5,7 +5,7 @@ import time
 from datetime import date
 
 def renderizar_aba_gestao(atl_data, vis_data):
-    """Módulo de RH v16.0: Gestão de Equipe com Sanitização Máxima"""
+    """Módulo de RH v17.0: Gestão de Equipe com Sanitização Máxima"""
     st.markdown("### 👥 Gestão Integrada de Equipe")
 
     # SUB-MENU DE NAVEGAÇÃO INTERNA
@@ -26,7 +26,6 @@ def renderizar_aba_gestao(atl_data, vis_data):
             st.markdown("#### 🏃‍♂️ Base de Atletas")
             if atl_data:
                 df_atl = pd.DataFrame(atl_data)
-                # Formata a data para dd/mm/yyyy na visualização da tabela
                 if 'data_nascimento' in df_atl.columns:
                     df_atl['data_nascimento'] = pd.to_datetime(df_atl['data_nascimento']).dt.strftime('%d/%m/%Y')
 
@@ -61,16 +60,12 @@ def renderizar_aba_gestao(atl_data, vis_data):
                 n_nome = st.text_input("Nome Completo*")
                 n_cpf = st.text_input("CPF* (Apenas números)", max_chars=14)
                 n_bolsa = st.number_input("Valor da Bolsa Mensal (R$)*", min_value=0.0, step=50.0)
-
-                # CORREÇÃO CRÍTICA: Formato DD/MM/YYYY para evitar erro de sistema
                 n_nasc = st.date_input("Data de Nascimento", format="DD/MM/YYYY", min_value=date(1950, 1, 1), max_value=date.today())
-
                 n_sexo = st.selectbox("Sexo", ["M", "F"])
                 n_email = st.text_input("E-mail do Atleta")
                 n_senha = st.text_input("Senha de Acesso", value="atleta123", type="password")
 
                 if st.form_submit_button("🚀 Salvar Novo Atleta", use_container_width=True, type="primary"):
-                    # 🛡️ BLINDAGEM: Sanitização e Validação de CPF (Exato 11 dígitos)
                     cpf_limpo = n_cpf.replace(".", "").replace("-", "").strip()
                     if n_nome.strip() and cpf_limpo.isdigit() and len(cpf_limpo) == 11:
                         dados_atl = {
@@ -89,22 +84,14 @@ def renderizar_aba_gestao(atl_data, vis_data):
             with st.form("form_novo_visitante", clear_on_submit=True):
                 v_nome = st.text_input("Nome Completo*")
                 v_email = st.text_input("E-mail* (Usado para login)")
-
-                # MÁSCARA VISUAL: Placeholder para facilitar a digitação
-                v_whats = st.text_input(
-                    "WhatsApp (DDD + Número)*", 
-                    placeholder="(11) 99999-9999", 
-                    help="Insira o DDD entre parênteses seguido do número."
-                )
-
+                v_whats = st.text_input("WhatsApp (DDD + Número)*", placeholder="(11) 99999-9999", help="Insira o DDD entre parênteses seguido do número.")
                 v_role = st.selectbox("Nível de Acesso", ["viewer", "auditor", "admin"])
                 v_senha = st.text_input("Senha de Acesso*", value="diretoria123", type="password")
 
                 if st.form_submit_button("🚀 Salvar Novo Visitante", use_container_width=True, type="primary"):
-                    # 🛡️ BLINDAGEM: Exige o @ no e-mail e sanitiza os espaços
                     if v_nome.strip() and "@" in v_email and v_senha.strip():
                         dados_vis = {"nome": v_nome.strip(), "email": v_email.strip(), "whatsapp": v_whats.strip(), "role": v_role, "senha": v_senha.strip()}
-                        ok, msg = db.upsert_visitante(dados_vis) # Chamada unificada
+                        ok, msg = db.upsert_visitante(dados_vis)
                         if ok: st.success(f"Membro {v_nome.strip()} cadastrado!"); time.sleep(1.5); st.rerun()
                         else: st.error(msg)
                     else: st.warning("⚠️ Nome, Senha e um E-mail válido (com @) são obrigatórios!")
@@ -125,13 +112,11 @@ def renderizar_aba_gestao(atl_data, vis_data):
                         e_nome = st.text_input("Nome", value=atleta.get('nome', ''))
                         e_bolsa = st.number_input("Valor da Bolsa (R$)", value=float(atleta.get('bolsa', 0.0)))
                         e_saldo = st.number_input("Ajuste Manual de Saldo (R$)", value=float(atleta.get('saldo', 0.0)))
-
-                        # Data na Edição com formato DD/MM/YYYY
                         data_v = pd.to_datetime(atleta.get('data_nascimento', date.today())).date()
                         e_nasc = st.date_input("Data de Nascimento", value=data_v, format="DD/MM/YYYY")
-
                         e_email = st.text_input("E-mail", value=atleta.get('email', ''))
                         e_senha = st.text_input("Redefinir Senha", value=atleta.get('senha', ''), type="password")
+
                         if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
                             dados_atl = atleta.copy(); dados_atl.update({
                                 "nome": e_nome.strip(), "bolsa": e_bolsa, "saldo": e_saldo, 
@@ -155,6 +140,7 @@ def renderizar_aba_gestao(atl_data, vis_data):
                         idx_role = ["viewer", "auditor", "admin"].index(papel_atual) if papel_atual in ["viewer", "auditor", "admin"] else 0
                         e_role = st.selectbox("Nível de Acesso", ["viewer", "auditor", "admin"], index=idx_role)
                         e_senha = st.text_input("Redefinir Senha", value=visitante.get('senha', ''), type="password")
+
                         if st.form_submit_button("💾 Salvar Alterações", use_container_width=True, type="primary"):
                             dados_vis = visitante.copy(); dados_vis.update({"nome": e_nome.strip(), "email": e_email.strip(), "whatsapp": e_whats.strip(), "role": e_role, "senha": e_senha.strip()})
                             ok, msg = db.upsert_visitante(dados_vis)
@@ -163,28 +149,60 @@ def renderizar_aba_gestao(atl_data, vis_data):
             else: st.info("Nenhum membro para editar.")
 
 def renderizar_aba_configuracoes():
-    """Painel de Governança Operacional: Regras de Negócio"""
+    """Painel de Governança Operacional: Regras e Radares"""
     st.markdown("### ⚙️ Painel de Governança Operacional")
+
+    # --- LINHA 1: SEGURANÇA E COMUNICAÇÃO ---
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🚨 Risco Financeiro (BI)")
         limite_atual = db.obter_limite_alerta()
         novo_limite = st.number_input("Gatilho de Saldo Crítico (R$):", value=limite_atual)
-        if st.button("💾 SALVAR REGRA DE SEGURANÇA", use_container_width=True):
+        if st.button("💾 Salvar Regra de Segurança", use_container_width=True, key="btn_limite"):
             ok, msg = db.salvar_limite_alerta(novo_limite)
             if ok: st.success(f"✅ Regra atualizada: R$ {novo_limite:,.2f}")
             else: st.error(msg)
+
     with col2:
         st.subheader("📧 Comunicação Oficial")
         email_atual = db.obter_email_admin()
         novo_email = st.text_input("E-mail Padrão da Diretoria:", value=email_atual)
-        if st.button("💾 SALVAR DESTINATÁRIO", use_container_width=True):
-            # 🛡️ BLINDAGEM: Não permite salvar um e-mail falso nas configurações
+        if st.button("💾 Salvar Destinatário", use_container_width=True, key="btn_email"):
             if "@" in novo_email:
                 ok, msg = db.salvar_email_admin(novo_email.strip())
                 if ok: st.success("✅ E-mail oficial atualizado!")
                 else: st.error(msg)
             else: st.warning("⚠️ Insira um e-mail válido com '@'.")
 
-# [admin_gestao.py][Sanitização Nível Vibranium v16.0][2026-02-27]
-# Total de Linhas de Código: 153
+    st.divider()
+
+    # --- LINHA 2: O RADAR PRIME 5AM ---
+    st.markdown("#### ⏰ Radar de Cobrança Automático (BI Prime)")
+    st.caption("Configuração do robô que envia a lista de atletas com pendências financeiras para a Diretoria às 05:00 AM.")
+
+    try:
+        cfg_atual = db.obter_config_alerta()
+    except:
+        cfg_atual = {"ativo": False, "frequencia_dias": 3}
+
+    with st.container(border=True):
+        c_rad1, c_rad2 = st.columns()
+        with c_rad1:
+            st.markdown("<br>", unsafe_allow_html=True)
+            alerta_ativo = st.toggle("Habilitar Radar Matinal", value=cfg_atual.get('ativo', False))
+        with c_rad2:
+            freq = st.number_input(
+                "Frequência do Alerta (Dias):", 
+                min_value=1, max_value=30, 
+                value=int(cfg_atual.get('frequencia_dias', 3)),
+                help="1 = Todos os dias | 3 = A cada 3 dias | 7 = Semanalmente",
+                disabled=not alerta_ativo
+            )
+
+        if st.button("💾 Atualizar Motor do Radar", use_container_width=True, type="primary"):
+            with st.spinner("Sincronizando gatilhos com o servidor..."):
+                ok, msg = db.salvar_config_alerta(alerta_ativo, freq)
+                if ok: st.success("✅ Radar configurado com sucesso!")
+                else: st.error(msg)
+
+# [admin_gestao.py][v17.0 - Radar e Sanitização Total][2026-02-27]

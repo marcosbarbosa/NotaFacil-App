@@ -8,7 +8,7 @@ import database as db
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465  # Protocolo SSL Seguro
 
-# Segurança Máxima: Puxa do cadeado do Replit de forma invisível
+# Segurança Máxima: Puxa do ambiente de forma invisível no Render
 EMAIL_USER = os.environ.get("EMAIL_USER")
 EMAIL_PASS = os.environ.get("EMAIL_PASS")
 
@@ -23,7 +23,7 @@ def _montar_rodape() -> str:
             'whatsapp': '(92) 99981-0256', 
             'instagram': '@driblecerto', 
             'copyright': 'Drible Certo', 
-            'versao': '1.0.0'
+            'versao': '1.5.0'
         }
 
     html = f"""
@@ -32,8 +32,8 @@ def _montar_rodape() -> str:
         <table width="100%" border="0" cellspacing="0" cellpadding="0">
             <tr>
                 <td style="padding-bottom: 10px;">
-                    <strong style="font-size: 14px; color: #333;">🏢 NotaFácil Prime | NSG</strong><br>
-                    <span style="color: #777;">Sistema de Governança Financeira de Elite</span>
+                    <strong style="font-size: 14px; color: #333;">🏢 NotaFácil | DC</strong><br>
+                    <span style="color: #777;">Sistema de Governança Financeira</span>
                 </td>
             </tr>
             <tr>
@@ -45,7 +45,7 @@ def _montar_rodape() -> str:
             <tr>
                 <td style="border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #999;">
                     © 2026 {cfg['copyright']}. Todos os direitos reservados.<br>
-                    Versão do Sistema: <strong>{cfg['versao']}</strong> | 🔒 Ambiente Seguro SSL 
+                    Versão do Sistema: <strong>{cfg['versao']}</strong> | 🔒 Governança Prime 
                 </td>
             </tr>
         </table>
@@ -56,11 +56,11 @@ def _montar_rodape() -> str:
 def _enviar_base(destinatario: str, assunto: str, html_corpo: str) -> tuple[bool, str]:
     """Motor de envio SSL com diagnóstico de erros aprimorado"""
     if not EMAIL_USER or not EMAIL_PASS:
-        return False, "⚠️ Credenciais de e-mail não encontradas na aba Secrets!"
+        return False, "⚠️ Credenciais de e-mail não encontradas nas Variáveis de Ambiente!"
 
     try:
         msg = MIMEMultipart()
-        msg['From'] = f"NotaFácil Prime <{EMAIL_USER}>"
+        msg['From'] = f"NotaFácil | DC <{EMAIL_USER}>"
         msg['To'] = destinatario
         msg['Subject'] = assunto
 
@@ -74,19 +74,19 @@ def _enviar_base(destinatario: str, assunto: str, html_corpo: str) -> tuple[bool
         return True, "✅ E-mail enviado com sucesso!"
 
     except smtplib.SMTPAuthenticationError:
-        return False, "❌ Falha de Autenticação: A Senha de App do Google inserida nos Secrets está incorreta ou foi revogada."
+        return False, "❌ Falha de Autenticação: A Senha de App do Google está incorreta ou foi revogada."
     except Exception as e:
         return False, f"❌ Erro de Conexão SMTP: {str(e)}"
 
 # --- FUNÇÕES PÚBLICAS DE INTERFACE ---
 
 def enviar_relatorio(destinatario: str, assunto: str, html_body: str) -> tuple[bool, str]:
-    """Dispara relatórios de BI com o template executivo"""
+    """Dispara relatórios de BI e LOGS com o template executivo"""
     return _enviar_base(destinatario, assunto, html_body)
 
 def recuperar_senha_usuario(email_user: str, nome_user: str, senha_real: str) -> tuple[bool, str]:
     """Envia chave de acesso para Atletas e Visitantes"""
-    assunto = "🔐 Recuperação de Acesso - NotaFácil Prime"
+    assunto = "🔐 Recuperação de Acesso - NotaFácil | DC"
     html_core = f"""
     <div style="font-family: Arial, sans-serif; color: #333; padding: 20px;">
         <h2 style="color: #ffc107;">🔐 Recuperação de Acesso</h2>
@@ -116,5 +116,50 @@ def recuperar_senha_admin(senha_master: str, email_destino: str) -> tuple[bool, 
     """
     return _enviar_base(email_destino, assunto, html_core)
 
-# [servicos_email.py][v9.0 - Blindagem SSL & Diagnóstico SMTP][2026-02-27]
-# Total de Linhas de Código: 111
+def disparar_radar_matinal(email_destino: str, atletas_pendentes: list) -> tuple[bool, str]:
+    """Motor BI Prime: Dispara o relatório das 05:00 AM com saldos devedores"""
+    assunto = "📊 RADAR DE GOVERNANÇA: Saldos a Repor (Atenção Diretoria)"
+
+    # Constrói a tabela dinamicamente com os atletas que devem notas
+    linhas_tabela = ""
+    total_devedor = 0.0
+
+    for atl in atletas_pendentes:
+        saldo_repor = float(atl['bolsa']) - float(atl['saldo'])
+        if saldo_repor > 0:  # Só mostra quem realmente deve reposição
+            linhas_tabela += f"""
+            <tr>
+                <td style='padding: 8px; border-bottom: 1px solid #ddd;'><b>{atl['nome']}</b></td>
+                <td style='padding: 8px; border-bottom: 1px solid #ddd; color: #555;'>{atl['cpf']}</td>
+                <td style='padding: 8px; border-bottom: 1px solid #ddd; color: #d9534f; font-weight: bold;'>R$ {saldo_repor:.2f}</td>
+            </tr>
+            """
+            total_devedor += saldo_repor
+
+    if not linhas_tabela:
+        linhas_tabela = "<tr><td colspan='3' style='text-align: center; padding: 15px;'>Nenhuma pendência. Todos os saldos estão zerados! 🎉</td></tr>"
+
+    html_core = f"""
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 20px;">
+        <h2 style="color: #212529; border-bottom: 2px solid #ffc107; padding-bottom: 10px;">⏰ Radar Matinal de Pendências</h2>
+        <p>Bom dia, Diretoria.</p>
+        <p>Segue o extrato atualizado dos atletas que possuem <b>saldo pendente de comprovação (Notas Fiscais)</b>.</p>
+
+        <table style='width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;'>
+            <tr style='background-color: #f8f9fa; text-align: left;'>
+                <th style='padding: 10px; border-bottom: 2px solid #dee2e6;'>Atleta</th>
+                <th style='padding: 10px; border-bottom: 2px solid #dee2e6;'>CPF</th>
+                <th style='padding: 10px; border-bottom: 2px solid #dee2e6;'>A Repor em NFs</th>
+            </tr>
+            {linhas_tabela}
+        </table>
+
+        <div style="background-color: #fff3cd; color: #856404; padding: 15px; border-left: 5px solid #ffeeba; margin-top: 20px;">
+            <b>Montante Total Pendente na Base:</b> <span style="font-size: 18px;">R$ {total_devedor:.2f}</span>
+        </div>
+        <p style="font-size: 11px; color: #999; margin-top: 20px;">Este é um alerta automático. Para alterar a frequência, acesse Configurações no sistema.</p>
+    </div>
+    """
+    return _enviar_base(email_destino, assunto, html_core)
+
+# [servicos_email.py][v9.2 - Rebranding Minimalista][2026-02-27]

@@ -5,15 +5,18 @@ import admin_auditoria as adm_aud
 import admin_gestao as adm_gst
 
 def exibir_sala_de_guerra():
-    """Roteador Administrativo v11.5: Blindagem de Identidade e Minimalismo Executivo"""
+    """Roteador Administrativo v12.3: Fix de Argumento 'spec'"""
 
-    # 1. Recupera credenciais de segurança do banco de dados
+    # 1. Recupera credenciais de segurança
     senha_master = db.obter_senha_admin()
     email_diretoria = db.obter_email_admin()
 
     # --- MENU LATERAL (Autenticação Discreta) ---
     st.sidebar.caption("Governança Corporativa")
-    col_input, col_btn = st.sidebar.columns([4, 1])
+
+    # 🛠️ CORREÇÃO DEFINITIVA: Adicionado dentro dos parênteses. 
+    # Isso define que a primeira coluna é 4x maior que a segunda.
+    col_input, col_btn = st.sidebar.columns()
 
     with col_input:
         senha_digitada = st.text_input(
@@ -27,14 +30,12 @@ def exibir_sala_de_guerra():
     if senha_digitada == senha_master:
         atl_data, vis_data, lan_data = db.carregar_dados_globais()
 
-        # 🛡️ BLINDAGEM: Garante que exista um usuário logado para não travar a Auditoria
         if 'usuario_logado' not in st.session_state or st.session_state.usuario_logado is None:
             st.session_state.usuario_logado = {"tipo": "admin", "id": "MASTER", "nome": "Diretoria Executiva"}
 
         user_logado = st.session_state.usuario_logado
         admin_atual = user_logado.get('nome', 'Diretoria Executiva')
 
-        # Abas limpas, sem emojis, focadas na seriedade do módulo
         tab_aud, tab_bi, tab_usr, tab_cfg = st.tabs([
             "Auditoria Operacional", 
             "Relatórios & BI", 
@@ -43,8 +44,7 @@ def exibir_sala_de_guerra():
         ])
 
         with tab_aud:
-            # Módulo de aprovação protegido contra erros de NoneType
-            adm_aud.renderizar_aba_auditoria(atl_data, lan_data)
+            adm_aud.renderizar_aba_auditoria(atl_data, lan_data, vis_data)
 
         with tab_bi:
             adm_aud.renderizar_aba_bi(atl_data, lan_data, admin_atual)
@@ -56,7 +56,6 @@ def exibir_sala_de_guerra():
             adm_gst.renderizar_aba_configuracoes()
 
     else: 
-        # --- PROTOCOLO DE SEGURANÇA (Acesso Negado) ---
         with col_btn:
             st.button("➔", help="Validar")
 
@@ -67,24 +66,22 @@ def exibir_sala_de_guerra():
 
         if st.sidebar.button("Recuperar Acesso", use_container_width=True):
             with st.sidebar.spinner("Processando..."):
-                ok, msg = email_svc.recover_senha_admin(senha_master, email_diretoria)
-
-                if ok and "@" in email_diretoria:
-                    partes = email_diretoria.split("@")
-                    prefixo = partes[0][:4] if len(partes[0]) >= 4 else partes[0][:2]
-                    email_oculto = f"{prefixo}***@{partes[1]}"
+                ok, msg = email_svc.recuperar_senha_admin(senha_master, email_diretoria)
+                if ok and email_diretoria and "@" in str(email_diretoria):
+                    partes = str(email_diretoria).split("@")
+                    prefixo = partes
+                    mascara = prefixo[:3] if len(prefixo) >= 3 else prefixo[:1]
+                    email_oculto = f"{mascara}***@{partes}"
                     st.sidebar.success(f"Enviado para: {email_oculto}")
                 else: 
                     st.sidebar.error(msg)
 
-        # TELA DE BLOQUEIO MINIMALISTA (Área Principal)
         _renderizar_lock_screen()
 
 def _renderizar_lock_screen():
-    """Interface Visual de Bloqueio - Foco na Tipografia e Sobriedade"""
     st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-
+    # 🛠️ CORREÇÃO ADICIONAL: Também adicionado aqui para centralizar o aviso
+    c1, c2, c3 = st.columns()
     with c2:
         st.markdown("""
         <div style="text-align: center; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px;">
@@ -99,4 +96,4 @@ def _renderizar_lock_screen():
         </div>
         """, unsafe_allow_html=True)
 
-# [admin.py][Minimalismo & Blindagem v11.5][2026-02-27]
+# [admin.py][v12.3 - Fix spec argument][2026-02-27]
