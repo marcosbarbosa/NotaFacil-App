@@ -4,31 +4,48 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import database as db
 
+# --- CONFIGURAÇÕES DE SERVIDOR ---
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 465  # Protocolo SSL Seguro
+
+# Segurança Máxima: Puxa do cadeado do Replit de forma invisível
+EMAIL_USER = os.environ.get("EMAIL_USER")
+EMAIL_PASS = os.environ.get("EMAIL_PASS")
+
 # --- MOTOR VISUAL DE E-MAIL ---
-def _montar_rodape():
-    """Gera o HTML do rodapé oficial com base nos dados do banco"""
-    cfg = db.obter_config_rodape()
+def _montar_rodape() -> str:
+    """Gera o HTML do rodapé oficial com blindagem contra falhas de banco"""
+    try:
+        cfg = db.obter_config_rodape()
+    except:
+        # Fallback de segurança caso o banco demore a responder
+        cfg = {
+            'whatsapp': '(92) 99981-0256', 
+            'instagram': '@driblecerto', 
+            'copyright': 'Drible Certo', 
+            'versao': '1.0.0'
+        }
 
     html = f"""
     <br><br>
-    <div style="background-color: #f4f4f4; padding: 20px; border-top: 3px solid #0056b3; font-family: Arial, sans-serif; font-size: 12px; color: #555;">
+    <div style="background-color: #f4f4f4; padding: 20px; border-top: 3px solid #ffc107; font-family: Arial, sans-serif; font-size: 12px; color: #555;">
         <table width="100%" border="0" cellspacing="0" cellpadding="0">
             <tr>
                 <td style="padding-bottom: 10px;">
-                    <strong style="font-size: 14px; color: #333;">🏢 NotaFácil Prime</strong><br>
-                    <span style="color: #777;">Sistema de Governança Financeira</span>
+                    <strong style="font-size: 14px; color: #333;">🏢 NotaFácil Prime | NSG</strong><br>
+                    <span style="color: #777;">Sistema de Governança Financeira de Elite</span>
                 </td>
             </tr>
             <tr>
                 <td style="padding-bottom: 10px;">
-                    <p style="margin: 5px 0;">📍 <strong>Suporte:</strong> {cfg['whatsapp']} | 📧 <strong>Contato:</strong> contato@driblecerto.com</p>
+                    <p style="margin: 5px 0;">📍 <strong>Suporte:</strong> {cfg['whatsapp']} | 📧 <strong>Contato:</strong> marcosbarbosa.am@gmail.com</p>
                     <p style="margin: 5px 0;">📸 <strong>Instagram:</strong> <a href="https://instagram.com/{cfg['instagram'].replace('@','')}" style="color: #0056b3; text-decoration: none;">{cfg['instagram']}</a></p>
                 </td>
             </tr>
             <tr>
                 <td style="border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #999;">
                     © 2026 {cfg['copyright']}. Todos os direitos reservados.<br>
-                    Versão do Sistema: <strong>{cfg['versao']}</strong> | 🔒 Ambiente Seguro SSL
+                    Versão do Sistema: <strong>{cfg['versao']}</strong> | 🔒 Ambiente Seguro SSL 
                 </td>
             </tr>
         </table>
@@ -36,79 +53,68 @@ def _montar_rodape():
     """
     return html
 
-def _conectar_smtp(usr, pwd, destinatario, msg):
-    """Função interna para envio SMTP"""
+def _enviar_base(destinatario: str, assunto: str, html_corpo: str) -> tuple[bool, str]:
+    """Motor de envio SSL com diagnóstico de erros aprimorado"""
+    if not EMAIL_USER or not EMAIL_PASS:
+        return False, "⚠️ Credenciais de e-mail não encontradas na aba Secrets!"
+
     try:
-        s = smtplib.SMTP('smtp.gmail.com', 587)
-        s.starttls()
-        s.login(usr, pwd)
-        s.sendmail(usr, destinatario, msg.as_string())
-        s.quit()
-        return True, "E-mail enviado com sucesso!"
+        msg = MIMEMultipart()
+        msg['From'] = f"NotaFácil Prime <{EMAIL_USER}>"
+        msg['To'] = destinatario
+        msg['Subject'] = assunto
+
+        # Injeta o rodapé oficial automaticamente
+        corpo_final = html_corpo + _montar_rodape()
+        msg.attach(MIMEText(corpo_final, 'html'))
+
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        return True, "✅ E-mail enviado com sucesso!"
+
+    except smtplib.SMTPAuthenticationError:
+        return False, "❌ Falha de Autenticação: A Senha de App do Google inserida nos Secrets está incorreta ou foi revogada."
     except Exception as e:
-        return False, f"Erro SMTP: {str(e)}"
+        return False, f"❌ Erro de Conexão SMTP: {str(e)}"
 
-# --- FUNÇÕES PÚBLICAS DE ENVIO ---
-def enviar_relatorio(destinatario, assunto, html_body):
-    usr = os.environ.get("EMAIL_USER")
-    pwd = os.environ.get("EMAIL_PASS")
-    if not usr or not pwd: return False, "Credenciais de e-mail não configuradas."
+# --- FUNÇÕES PÚBLICAS DE INTERFACE ---
 
-    # Injeta o rodapé no corpo do e-mail
-    corpo_completo = html_body + _montar_rodape()
+def enviar_relatorio(destinatario: str, assunto: str, html_body: str) -> tuple[bool, str]:
+    """Dispara relatórios de BI com o template executivo"""
+    return _enviar_base(destinatario, assunto, html_body)
 
-    msg = MIMEMultipart()
-    msg['From'] = usr
-    msg['To'] = destinatario
-    msg['Subject'] = assunto
-    msg.attach(MIMEText(corpo_completo, 'html'))
-    return _conectar_smtp(usr, pwd, destinatario, msg)
-
-def recuperar_senha_usuario(email_user, nome_user, senha_real):
-    usr = os.environ.get("EMAIL_USER")
-    pwd = os.environ.get("EMAIL_PASS")
-    if not usr or not pwd: return False, "Credenciais de e-mail não configuradas."
-
-    assunto = "Recuperação de Acesso - NotaFácil Prime"
-    # Conteúdo específico + Rodapé automático
+def recuperar_senha_usuario(email_user: str, nome_user: str, senha_real: str) -> tuple[bool, str]:
+    """Envia chave de acesso para Atletas e Visitantes"""
+    assunto = "🔐 Recuperação de Acesso - NotaFácil Prime"
     html_core = f"""
     <div style="font-family: Arial, sans-serif; color: #333; padding: 20px;">
-        <h2 style="color: #0056b3;">🔐 Recuperação de Acesso</h2>
+        <h2 style="color: #ffc107;">🔐 Recuperação de Acesso</h2>
         <p>Olá, <strong>{nome_user}</strong>.</p>
-        <p>Recebemos uma solicitação para recuperar sua senha de acesso.</p>
-        <div style="background-color: #eef; padding: 15px; border-radius: 5px; margin: 20px 0; display: inline-block;">
-            Senha Atual: <strong style="color: #0056b3; font-size: 20px; letter-spacing: 2px;">{senha_real}</strong>
+        <p>Recebemos uma solicitação para recuperar sua senha de acesso ao portal.</p>
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #ffc107; margin: 20px 0;">
+            Sua Senha Atual: <strong style="font-size: 20px; letter-spacing: 2px;">{senha_real}</strong>
         </div>
-        <p>Recomendamos que você apague este e-mail após memorizar a senha.</p>
+        <p><b>Dica de Segurança:</b> Memorize sua senha e apague este e-mail.</p>
     </div>
     """
+    return _enviar_base(email_user, assunto, html_core)
 
-    msg = MIMEMultipart()
-    msg['From'] = usr
-    msg['To'] = email_user
-    msg['Subject'] = assunto
-    msg.attach(MIMEText(html_core + _montar_rodape(), 'html'))
-    return _conectar_smtp(usr, pwd, email_user, msg)
-
-def recuperar_senha_admin(senha_master, email_destino):
-    usr = os.environ.get("EMAIL_USER")
-    pwd = os.environ.get("EMAIL_PASS")
-    if not usr or not pwd: return False, "SMTP não configurado."
-
+def recuperar_senha_admin(senha_master: str, email_destino: str) -> tuple[bool, str]:
+    """Alerta de segurança para envio da Senha Mestra"""
+    assunto = "🛡️ ALERTA: Recuperação de Senha Master"
     html_core = f"""
     <div style="font-family: Arial, sans-serif; color: #333; padding: 20px;">
         <h2 style="color: #d9534f;">🚨 Acesso Administrativo Master</h2>
-        <p>Esta é uma notificação de segurança da Central de Governança.</p>
-        <p>A senha Master atual é:</p>
-        <p><strong style="font-size: 24px; background-color: #fee; padding: 5px 10px;">{senha_master}</strong></p>
+        <p>Este é um alerta de segurança da <b>Sala de Guerra</b>.</p>
+        <p>Abaixo está a chave mestra solicitada para acesso à Central de Governança:</p>
+        <div style="background-color: #fee; color: #d9534f; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
+            <strong style="font-size: 26px; letter-spacing: 4px;">{senha_master}</strong>
+        </div>
+        <p style="font-size: 12px; color: #999;">Aviso: O acesso via senha master é monitorado e registrado.</p>
     </div>
     """
+    return _enviar_base(email_destino, assunto, html_core)
 
-    msg = MIMEMultipart()
-    msg['From'] = usr
-    msg['To'] = email_destino
-    msg['Subject'] = "🔐 Recuperação: Senha Master - NotaFácil Prime"
-    msg.attach(MIMEText(html_core + _montar_rodape(), 'html'))
-    return _conectar_smtp(usr, pwd, email_destino, msg)
-
-# [servicos_email.py][Rodapé HTML Oficial Prime Integrado][2026-02-26 10:15][v1.2][112 linhas]
+# [servicos_email.py][v9.0 - Blindagem SSL & Diagnóstico SMTP][2026-02-27]
+# Total de Linhas de Código: 111

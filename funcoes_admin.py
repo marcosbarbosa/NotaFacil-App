@@ -3,34 +3,59 @@ import pandas as pd
 import plotly.express as px
 
 def preparar_auditoria(lan_data, mes_n, ano_r, status_f):
+    """Filtra e padroniza os dados para a Auditoria e Exportação"""
     if not lan_data: return pd.DataFrame()
     df = pd.DataFrame(lan_data)
-    df['dt'] = pd.to_datetime(df['created_at'])
-    mapa = {"Pendente": "⚠️ Pendente", "Aprovada": "✅ Aprovada", "Reprovada": "❌ Reprovada"}
+
+    # Padroniza a data para evitar erros de filtro
+    df['dt'] = pd.to_datetime(df.get('created_at', df.get('data_nota')))
+
+    # Mapeamento visual de status (Aprovado no banco vira ✅ Aprovada na tela)
+    mapa = {"Pendente": "⚠️ Pendente", "Aprovado": "✅ Aprovada", "Reprovada": "❌ Reprovada"}
     df['Status_UI'] = df['status'].map(mapa).fillna("⚠️ Pendente")
 
-    df['Atleta (Bolsa)'] = df.apply(lambda r: r.get('atletas', {}).get('nome', '🚨 SEM VÍNCULO') if isinstance(r.get('atletas'), dict) else '🚨 SEM VÍNCULO', axis=1)
-    df['Lançado por'] = df.apply(lambda r: r.get('visitantes', {}).get('nome') if isinstance(r.get('visitantes'), dict) else (r.get('atletas', {}).get('nome', 'Sistema') if isinstance(r.get('atletas'), dict) else 'Sistema'), axis=1)
+    # 🚀 FIX SINCRONIZAÇÃO: Garante o uso dos novos nomes de coluna (Bug do Espelho)
+    if 'atleta_nome' not in df.columns:
+        df['atleta_nome'] = df.apply(lambda r: r.get('atletas', {}).get('nome', '🚨 SEM VÍNCULO') if isinstance(r.get('atletas'), dict) else '🚨 SEM VÍNCULO', axis=1)
+
+    if 'lancado_por' not in df.columns:
+        df['lancado_por'] = df.apply(lambda r: r.get('visitantes', {}).get('nome') if isinstance(r.get('visitantes'), dict) else (r.get('atletas', {}).get('nome', 'Sistema') if isinstance(r.get('atletas'), dict) else 'Sistema'), axis=1)
+
+    # Garante que a coluna de foto não quebre se estiver vazia
+    if 'foto_url' not in df.columns:
+        df['foto_url'] = df.get('arquivo_url', df.get('comprovante', ''))
 
     df['Saldo_Atleta'] = df.apply(lambda r: r.get('atletas', {}).get('saldo') if isinstance(r.get('atletas'), dict) else None, axis=1)
     df['orfao'] = df['atleta_cpf'].isna()
 
+    # Aplicação dos Filtros da Sala de Guerra
     df_f = df[(df['dt'].dt.month == mes_n) & (df['dt'].dt.year == ano_r)]
-    if status_f != "Todas": df_f = df_f[df_f['Status_UI'] == status_f]
+    if status_f != "Todas": 
+        df_f = df_f[df_f['Status_UI'] == status_f]
+
     return df_f
 
 def exibir_origem_com_saldo(atleta, operador, saldo):
+    """Card visual da Auditoria (Reflete quem recebe e quem enviou)"""
     st.markdown("#### 🔍 Detalhes da Origem e Saldo")
     c1, c2, c3 = st.columns(3)
-    if "🚨" in atleta: c1.error(f"**Beneficiário:** {atleta}")
-    else: c1.success(f"**Beneficiário:** {atleta}")
-    c2.info(f"**Operador:** {operador}")
+
+    if "🚨" in str(atleta): 
+        c1.error(f"**Beneficiário:**\n\n{atleta}")
+    else: 
+        c1.success(f"**Beneficiário:**\n\n🏃 {atleta}")
+
+    # Exibe o operador real que fez o lançamento
+    c2.info(f"**Operador Logado:**\n\n👔 {operador}")
+
     if saldo is not None:
         cor = "normal" if saldo > 0 else "inverse"
         c3.metric("Saldo Disponível", f"R$ {float(saldo):,.2f}", delta_color=cor)
-    else: c3.metric("Saldo Disponível", "N/A")
+    else: 
+        c3.metric("Saldo Disponível", "N/A")
 
 def gerar_grafico_consumo(atl_data):
+    """Motor gráfico auxiliar para consumo de bolsas"""
     if not atl_data: return None
     df = pd.DataFrame(atl_data)
     col_bolsa = 'bolsa' if 'bolsa' in df.columns else 'limite_mensal'
@@ -43,13 +68,13 @@ def gerar_grafico_consumo(atl_data):
     return None
 
 def montar_html_relatorio(df_f, mes, ano, status):
-    """Transforma os dados filtrados em um e-mail HTML com layout corporativo."""
+    """Transforma os dados filtrados em um e-mail HTML com layout corporativo (Fallback)."""
     if df_f.empty: return "<p>Nenhum dado encontrado para os filtros selecionados.</p>"
 
-    df_export = df_f[['Status_UI', 'Atleta (Bolsa)', 'Lançado por', 'valor', 'data_nota']].copy()
+    # Sincronizado com os novos nomes de coluna
+    df_export = df_f[['Status_UI', 'atleta_nome', 'lancado_por', 'valor', 'data_nota']].copy()
     df_export.columns = ['Status', 'Beneficiário', 'Operador', 'Valor (R$)', 'Data NF']
 
-    # Renderiza a tabela em HTML limpo
     html_table = df_export.to_html(index=False, border=1, justify='center')
 
     html_body = f"""
@@ -67,4 +92,5 @@ def montar_html_relatorio(df_f, mes, ano, status):
     """
     return html_body
 
-# [funcoes_admin.py][Formatador de Relatório HTML e BI][2026-02-24 22:50][v1.14][60 linhas]
+# [funcoes_admin.py][Sincronizador de Colunas Prime v12.0][2026-02-27]
+# Total de Linhas de Código: 84
